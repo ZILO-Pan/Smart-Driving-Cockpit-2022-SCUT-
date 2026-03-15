@@ -48,8 +48,8 @@ TTS_SAMPLE_RATE = 24000
 MIC_SAMPLE_RATE = 16000
 MIC_CHANNELS = 1
 MIC_CHUNK_MS = 200            # 每个音频片段的毫秒数
-MIC_SILENCE_THRESHOLD = 500   # 静音检测阈值（可按环境调整）
-MIC_SILENCE_DURATION = 1.5    # 静音多久算说完（秒）
+MIC_SILENCE_THRESHOLD = 300   # 静音检测阈值（可按环境调整）
+MIC_SILENCE_DURATION = 2.5    # 静音多久算说完（秒）
 
 # ============ AI 助手行为 ============
 VISION_CAPTURE_INTERVAL = 15  # 定时播报: 每 N 秒分析一次画面
