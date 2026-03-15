@@ -1,17 +1,25 @@
 """
-豆包 AI 对话接口
-处理用户的文字对话请求
+豆包大模型对话接口 (火山方舟 Responses API)
+同时支持纯文字对话和图片+文字多模态输入
 
 改动指南:
-- 换模型: 修改 settings.DOUBAO_CHAT_MODEL
 - 改 system prompt: 修改 SYSTEM_PROMPT
-- 加 function calling: 在 _build_request() 里加 tools 字段
-- 换成其他 LLM (OpenAI 等): 改 API 地址和请求格式
+- 换模型/接入点: 修改 settings.ARK_ENDPOINT_ID
+- 加 function calling: 在 payload 里加 tools 字段
 """
 
 import requests
 import threading
+import base64
+import io
 from collections import deque
+
+import numpy as np
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 from config import settings
 
@@ -19,94 +27,145 @@ from config import settings
 SYSTEM_PROMPT = """你是一个智能驾驶座舱AI助手，名叫"小驾"。你运行在一辆 L4 级自动驾驶汽车中。
 
 你的能力:
-1. 回答驾驶相关问题（路况、导航、交通规则等）
-2. 闲聊和娱乐（讲笑话、播放音乐建议等）
-3. 解读车辆状态（当前速度、是否自动驾驶等）
-4. 安全提醒（提醒乘客系安全带、路况变化等）
+1. 观察前方路况（通过摄像头画面）并主动提醒驾驶安全
+2. 回答驾驶相关问题（路况、导航、交通规则等）
+3. 闲聊和娱乐（讲笑话、推荐音乐等）
+4. 解读车辆状态（当前速度、是否自动驾驶等）
 
 注意事项:
-- 回复简洁友好，适合车载语音播报（尽量控制在2-3句话）
+- 回复简洁友好，适合车载语音播报（控制在2-3句话，不超过80字）
+- 不要使用markdown格式、列表符号、星号等，只用纯文本
 - 如果涉及安全问题，始终优先提醒安全
 - 你可以访问车辆的实时状态数据
 """
+
+VISION_PROMPT = """你是一个智能驾驶视觉分析助手。请分析这张来自自动驾驶汽车前方摄像头的画面。
+
+请用2-3句话简要描述:
+1. 道路状况和前方车辆/行人情况
+2. 是否有需要注意的安全隐患
+
+回复要简洁自然，像一个副驾在和你聊天一样，不要用列表格式。"""
 
 
 class DoubaoChat:
     def __init__(self):
         self._history = deque(maxlen=settings.DOUBAO_MAX_HISTORY * 2)
         self._lock = threading.Lock()
+        self._url = f"{settings.ARK_API_BASE}/chat/completions"
+        self._headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {settings.ARK_API_KEY}"
+        }
 
     def chat(self, user_text: str, vehicle_state: dict = None) -> str:
-        """
-        同步对话（会阻塞直到返回）
-        user_text: 用户说的话
-        vehicle_state: 可选，当前车辆状态
-        返回: AI 回复文字
-        """
-        # 构建带车辆状态的用户消息
-        enriched_text = user_text
+        """纯文字对话"""
+        enriched = user_text
         if vehicle_state:
             speed = vehicle_state.get('speed_kmh', 0)
             autopilot = vehicle_state.get('autopilot_enabled', True)
-            enriched_text = (
+            enriched = (
                 f"[车辆状态: 速度{speed:.0f}km/h, "
                 f"{'自动驾驶中' if autopilot else '手动驾驶'}]\n"
                 f"用户说: {user_text}"
             )
 
         with self._lock:
-            self._history.append({"role": "user", "content": enriched_text})
+            self._history.append({"role": "user", "content": enriched})
 
-        # 调用 API
         try:
-            response = self._call_api()
-            reply = response.get("choices", [{}])[0].get(
-                "message", {}
-            ).get("content", "抱歉，我没有听清。")
+            reply = self._call_text_api()
         except Exception as e:
-            reply = f"AI 服务暂时不可用: {str(e)[:50]}"
-            print(f"[AI-CHAT] API 调用失败: {e}")
+            reply = f"AI暂时无法回复"
+            print(f"[CHAT] API 调用失败: {e}")
 
         with self._lock:
             self._history.append({"role": "assistant", "content": reply})
 
         return reply
 
-    def chat_async(self, user_text: str, callback, vehicle_state: dict = None):
-        """
-        异步对话（不阻塞，结果通过 callback 返回）
-        callback(reply_text: str)
-        """
-        def _run():
-            reply = self.chat(user_text, vehicle_state)
-            callback(reply)
+    def chat_with_image(self, text: str, frame: np.ndarray) -> str:
+        """带图片的多模态对话（用于视觉分析）"""
+        if Image is None or frame is None:
+            return self.chat(text)
 
-        threading.Thread(target=_run, daemon=True).start()
+        b64 = self._frame_to_base64(frame)
 
-    def _call_api(self) -> dict:
-        """调用豆包 API"""
+        try:
+            reply = self._call_vision_api(text, b64)
+        except Exception as e:
+            reply = "视觉分析暂不可用"
+            print(f"[VISION] API 调用失败: {e}")
+
+        return reply
+
+    def _frame_to_base64(self, frame: np.ndarray) -> str:
+        """numpy BGR → JPEG base64"""
+        img = Image.fromarray(frame[:, :, ::-1])  # BGR → RGB
+        # 缩小图片以减少 API 延迟和成本
+        img.thumbnail((640, 480))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=60)
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    def _call_text_api(self) -> str:
+        """调用纯文字对话 API"""
         with self._lock:
             messages = [
                 {"role": "system", "content": SYSTEM_PROMPT}
             ] + list(self._history)
 
-        url = f"{settings.DOUBAO_API_BASE}/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {settings.DOUBAO_API_KEY}"
-        }
         payload = {
-            "model": settings.DOUBAO_CHAT_MODEL,
+            "model": settings.ARK_ENDPOINT_ID,
             "messages": messages,
             "temperature": 0.7,
-            "max_tokens": 512,
+            "max_tokens": 256,
         }
 
-        resp = requests.post(url, json=payload, headers=headers, timeout=15)
+        resp = requests.post(
+            self._url, json=payload, headers=self._headers, timeout=15
+        )
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"].strip()
+
+    def _call_vision_api(self, text: str, image_b64: str) -> str:
+        """调用视觉理解 API（多模态）"""
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_b64}"
+                        }
+                    }
+                ]
+            }
+        ]
+
+        payload = {
+            "model": settings.ARK_ENDPOINT_ID,
+            "messages": messages,
+            "max_tokens": 256,
+        }
+
+        resp = requests.post(
+            self._url, json=payload, headers=self._headers, timeout=30
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"].strip()
+
+    def chat_async(self, user_text: str, callback, vehicle_state: dict = None):
+        """异步对话"""
+        def _run():
+            reply = self.chat(user_text, vehicle_state)
+            callback(reply)
+        threading.Thread(target=_run, daemon=True).start()
 
     def clear_history(self):
-        """清除对话历史"""
         with self._lock:
             self._history.clear()
