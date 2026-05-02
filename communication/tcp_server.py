@@ -15,7 +15,7 @@ import time
 import struct
 
 from config import settings
-from core.vehicle_state import VehicleStateManager
+from edge.state.vehicle_state import VehicleStateManager
 from communication.protocol import build_unity_packet, parse_unity_message
 
 

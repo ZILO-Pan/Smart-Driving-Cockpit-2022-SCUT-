@@ -14,11 +14,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from config import settings
-from core.vehicle_state import VehicleStateManager
+from edge.state.vehicle_state import VehicleStateManager
 
 app = FastAPI(title="Smart Cockpit HMI")
 
-STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "hmi" / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 _state_manager: VehicleStateManager = None

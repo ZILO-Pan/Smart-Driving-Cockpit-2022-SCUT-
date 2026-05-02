@@ -19,9 +19,9 @@ import requests
 import threading
 
 from config import settings
-from core.cabin_state import CabinStateManager
-from core.vehicle_state import VehicleStateManager
-from core.service_executor import ServiceExecutor
+from edge.state.cabin_state import CabinStateManager
+from edge.state.vehicle_state import VehicleStateManager
+from edge.state.service_executor import ServiceExecutor
 
 SERVICE_AGENT_PROMPT = """你是智能驾驶座舱AI助手"小驾"，运行在L4级自动驾驶汽车中。
 你需要理解用户的模糊需求，推断意图，并输出结构化 JSON 来执行座舱服务。

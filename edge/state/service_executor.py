@@ -3,8 +3,8 @@
 接收 Agent 输出的结构化动作，执行到座舱/车辆/HMI 上
 """
 
-from core.cabin_state import CabinStateManager
-from core.vehicle_state import VehicleStateManager
+from edge.state.cabin_state import CabinStateManager
+from edge.state.vehicle_state import VehicleStateManager
 
 
 class ServiceExecutor:

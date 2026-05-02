@@ -1,5 +1,15 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(C:/Users/Pzl/AppData/Local/Programs/Python/Python312/python.exe -c \"from config import settings; print\\('Settings OK:', settings.ARK_API_KEY[:8] + '...'\\)\")",
+      "Bash(C:/Users/Pzl/AppData/Local/Programs/Python/Python312/python.exe -m pip install python-dotenv fastapi uvicorn --quiet)",
+      "Bash(timeout 5 C:/Users/Pzl/AppData/Local/Programs/Python/Python312/python.exe main.py --hmi-only)",
+      "Bash(C:/Users/Pzl/AppData/Local/Programs/Python/Python312/python.exe -c ' *)",
+      "Bash(xargs rm *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git -c http.proxy=\"\" -c https.proxy=\"\" push origin main)"
+    ],
     "additionalDirectories": [
       "e:\\归档作业\\smart_cockpit\\Arduino"
     ]

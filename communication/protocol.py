@@ -12,7 +12,7 @@
 import json
 import struct
 import time
-from core.vehicle_state import VehicleState
+from edge.state.vehicle_state import VehicleState
 
 
 # ============ TCP → Unity 协议 (JSON) ============

@@ -13,7 +13,7 @@ import time
 import numpy as np
 
 from config import settings
-from ai_assistant.doubao_chat import DoubaoChat, VISION_PROMPT
+from cloud.chat.doubao_chat import DoubaoChat, VISION_PROMPT
 
 
 class VisionObserver:

@@ -13,11 +13,11 @@ AI 助手管理器 (完整版)
 """
 
 import threading
-from core.vehicle_state import VehicleStateManager
-from ai_assistant.doubao_chat import DoubaoChat
-from ai_assistant.doubao_vision import VisionObserver
-from ai_assistant.microphone_asr import MicrophoneASR
-from ai_assistant.speaker_tts import Speaker
+from edge.state.vehicle_state import VehicleStateManager
+from cloud.chat.doubao_chat import DoubaoChat
+from cloud.vision.doubao_vision import VisionObserver
+from cloud.voice.microphone_asr import MicrophoneASR
+from cloud.voice.speaker_tts import Speaker
 
 
 class AssistantManager:

@@ -331,7 +331,7 @@ import time
 import math
 
 from config import settings
-from core.vehicle_state import VehicleStateManager
+from edge.state.vehicle_state import VehicleStateManager
 
 
 # ============ 场景预设 (按键 1~8) ============
