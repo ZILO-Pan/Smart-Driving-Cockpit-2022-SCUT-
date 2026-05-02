@@ -1091,7 +1091,7 @@ class CarlaBridge:
     def _draw_hud(self):
         state = self.state_manager.get()
         view_text = "Cabin" if self.is_cabin_view else "Third Person"
-        font = pygame.font.SysFont('arial', 22, bold=True)
+        font = pygame.font.Font(None, 26)
 
         lines = [
             f"Scene: {self._current_scene_name}",
@@ -1112,7 +1112,7 @@ class CarlaBridge:
 
         # 中间大字通知
         if self._hud_notification and time.time() < self._hud_notify_time:
-            nf = pygame.font.SysFont('arial', 36, bold=True)
+            nf = pygame.font.Font(None, 40)
             ts = nf.render(self._hud_notification, True, (255, 255, 80))
             tr = ts.get_rect(center=(settings.WINDOW_WIDTH // 2, 80))
             bg = pygame.Surface((tr.width + 40, tr.height + 16))

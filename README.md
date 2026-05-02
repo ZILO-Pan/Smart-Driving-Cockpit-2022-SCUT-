@@ -5,13 +5,12 @@
 ```
 smart_cockpit/
 ├── config/
-│   └── settings.py                # 全局配置（API Key、端口、串口、AI参数等）
+│   └── settings.py                # 全局配置（API Key、端口、AI参数等）
 ├── core/
 │   ├── carla_bridge.py            # CARLA 核心桥接（场景切换、极端事件、摄像头）
 │   └── vehicle_state.py           # 车辆状态数据模型（速度、转向角、位置等）
 ├── communication/
 │   ├── tcp_server.py              # TCP 服务端 → Unity HMI 连接
-│   ├── serial_bridge.py           # 串口通信 → ESP32 舵机控制
 │   └── protocol.py                # 统一消息协议定义（JSON schema）
 ├── ai_assistant/
 │   ├── doubao_chat.py             # 豆包大模型对话 + 视觉理解（火山方舟 API）
@@ -21,9 +20,6 @@ smart_cockpit/
 │   └── assistant_manager.py       # AI 助手管理器（编排所有AI模块）
 ├── hmi/
 │   └── unity_data_provider.py     # 为 Unity 准备 HMI 数据包
-├── hardware/
-│   ├── servo_mapper.py            # 转向角 → 舵机 PWM 映射逻辑
-│   └── esp32_servo_controller.ino # ESP32 Arduino 参考代码
 ├── main.py                        # 主入口 - 启动所有模块
 └── README.md
 ```
@@ -41,14 +37,11 @@ pip install pygame numpy carla requests pyaudio websockets==12.0 Pillow
 先启动 CARLA（CarlaUE4.exe），然后运行项目：
 
 ```bash
-# 完整启动（需要所有硬件和API就绪）
+# 完整启动（需要API就绪）
 python main.py
 
-# 不接串口（没有ESP32时）
-python main.py --no-serial
-
-# 不接串口也不启动AI（纯CARLA测试）
-python main.py --no-serial --no-ai
+# 不启动AI（纯CARLA测试）
+python main.py --no-ai
 ```
 
 ### 3. 运行效果
@@ -59,7 +52,6 @@ python main.py --no-serial --no-ai
 - 每15秒自动分析前方路况并语音播报
 - 按 1~8 切换场景，按 C 触发极端交通事件
 - TCP 服务端等待 Unity HMI 连接
-- 车辆转向角数据实时发送给 ESP32 舵机
 
 ## 快捷键
 
@@ -100,8 +92,7 @@ python main.py --no-serial --no-ai
 |---|---|
 | 调试 Unity TCP 通信 | `communication/tcp_server.py` + `hmi/unity_data_provider.py` |
 | 给 Unity 增加数据字段 | `core/vehicle_state.py` + `communication/protocol.py` |
-| 调试 ESP32 舵机 | `communication/serial_bridge.py` + `hardware/servo_mapper.py` |
-| 改端口/串口号 | `config/settings.py` |
+| 改端口 | `config/settings.py` |
 
 ## 数据流
 
@@ -120,10 +111,6 @@ python main.py --no-serial --no-ai
 │                                                     │
 │  车辆状态 → TCP推送 → Unity 显示仪表盘/导航/AI气泡  │
 │                                                     │
-├─────────────────── 硬件控制链路 ──────────────────┤
-│                                                     │
-│  转向角 → 串口 → ESP32 → 舵机/电机                  │
-│                                                     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -138,5 +125,4 @@ python main.py --no-serial --no-ai
 ## 后续开发方向
 
 1. **Unity HMI**: 连接 TCP 服务端，显示智驾界面、AI 助手形象动画
-2. **ESP32 舵机**: 接入串口，实时映射方向盘转角到物理舵机
-3. **AI 增强**: 接入更多豆包能力（导航、音乐推荐、function calling）
+2. **AI 增强**: 接入更多豆包能力（导航、音乐推荐、function calling）

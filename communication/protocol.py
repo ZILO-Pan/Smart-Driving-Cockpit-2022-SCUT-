@@ -84,44 +84,6 @@ def parse_unity_message(data: bytes) -> dict | None:
         return None
 
 
-# ============ 串口 → ESP32 协议 (紧凑二进制) ============
-
-# 帧格式: [0xAA][0x55][steer_high][steer_low][speed][checksum]
-# 总共 6 字节，保持低延迟
-SERIAL_HEADER = bytes([0xAA, 0x55])
-
-def build_servo_packet(steer_angle_deg: float, speed_kmh: float) -> bytes:
-    """
-    构建发送给 ESP32 的舵机控制数据包
-    - steer_angle_deg: -540~540 度 → 映射为 0~65535 (uint16)
-    - speed_kmh: 0~255 km/h → uint8
-
-    ESP32 端解析 (Arduino):
-        if (Serial.read() == 0xAA && Serial.read() == 0x55) {
-            uint16_t steer = (Serial.read() << 8) | Serial.read();
-            uint8_t speed = Serial.read();
-            uint8_t checksum = Serial.read();
-            if (checksum == ((steer >> 8) + (steer & 0xFF) + speed) & 0xFF) {
-                float angle = (steer / 65535.0) * 1080.0 - 540.0;
-                // 控制舵机...
-            }
-        }
-    """
-    # 映射: -540~540 → 0~65535
-    steer_normalized = (steer_angle_deg + 540.0) / 1080.0
-    steer_normalized = max(0.0, min(1.0, steer_normalized))
-    steer_uint16 = int(steer_normalized * 65535)
-
-    speed_uint8 = int(max(0, min(255, speed_kmh)))
-
-    # 校验和
-    high = (steer_uint16 >> 8) & 0xFF
-    low = steer_uint16 & 0xFF
-    checksum = (high + low + speed_uint8) & 0xFF
-
-    return SERIAL_HEADER + struct.pack('>HB', steer_uint16, speed_uint8) + bytes([checksum])
-
-
 # ============ AI 助手消息格式 ============
 
 def build_ai_request(user_text: str, vehicle_state: dict = None) -> dict:

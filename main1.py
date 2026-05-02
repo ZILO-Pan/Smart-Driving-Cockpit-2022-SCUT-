@@ -5,19 +5,16 @@
 启动方式: python main.py
 可选参数:
   --no-preview     不开 pygame 本地预览窗口
-  --no-serial      不启动串口（没接 ESP32 时用）
   --no-ai          不启动 AI 助手（没配 API Key 时用）
 """
 
 import sys
-import time
 import signal
 
 from config import settings
 from core.vehicle_state import VehicleStateManager
 from core.carla_bridge import CarlaBridge
 from communication.tcp_server import TCPServer
-from communication.serial_bridge import SerialBridge
 from ai_assistant.assistant_manager import AssistantManager
 from hmi.unity_data_provider import UnityDataProvider
 
@@ -32,7 +29,6 @@ class SmartCockpitApp:
         # 各子系统
         self.carla_bridge = CarlaBridge(self.state_manager)
         self.tcp_server = TCPServer(self.state_manager)
-        self.serial_bridge = SerialBridge(self.state_manager)
         self.ai_assistant = AssistantManager(self.state_manager)
         self.hmi_provider = UnityDataProvider(self.state_manager)
 
@@ -49,13 +45,7 @@ class SmartCockpitApp:
         # 2. TCP 服务端（Unity 连接）
         self.tcp_server.start()
 
-        # 3. 串口（ESP32 舵机）
-        if "--no-serial" not in self.args:
-            self.serial_bridge.start()
-        else:
-            print("[MAIN] 跳过串口模块 (--no-serial)")
-
-        # 4. AI 助手
+        # 3. AI 助手
         if "--no-ai" not in self.args:
             self.ai_assistant.start(
                 frame_getter=self.carla_bridge.get_latest_frame
@@ -71,7 +61,7 @@ class SmartCockpitApp:
         ))
         print("[MAIN] SPACE: 切换视角 | ESC: 退出\n")
 
-        # 5. 启动 CARLA 主循环（阻塞）
+        # 4. 启动 CARLA 主循环（阻塞）
         self.carla_bridge.run()
 
     def _poll_unity_messages(self):
@@ -87,7 +77,6 @@ class SmartCockpitApp:
         print("\n[MAIN] 正在关闭所有模块...")
         self.carla_bridge.stop()
         self.tcp_server.stop()
-        self.serial_bridge.stop()
         self.ai_assistant.stop()
         self.carla_bridge.cleanup()
         print("[MAIN] 系统已关闭")

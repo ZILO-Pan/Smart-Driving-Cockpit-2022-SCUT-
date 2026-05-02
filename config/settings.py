@@ -19,10 +19,6 @@ TCP_HOST = "0.0.0.0"
 TCP_PORT = 9000
 TCP_MAX_CLIENTS = 3
 
-# ============ 串口（ESP32 舵机控制） ============
-SERIAL_PORT = "COM3"
-SERIAL_BAUD = 115200
-SERIAL_TIMEOUT = 0.01
 
 # ============ 火山方舟 - 豆包大模型 (对话 + 视觉) ============
 ARK_API_KEY = "c5504110-d5bd-4876-8009-d3ddf3897ef8"
@@ -59,4 +55,3 @@ VISION_AUTO_BROADCAST = True  # 是否自动语音播报路况（定时模式）
 # ============ 数据更新频率 ============
 VEHICLE_STATE_HZ = 30
 TCP_SEND_HZ = 30
-SERIAL_SEND_HZ = 50
