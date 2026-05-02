@@ -119,7 +119,7 @@ class Speaker:
         try:
             async with websockets.connect(
                 settings.TTS_WS_URL,
-                extra_headers=ws_headers,
+                additional_headers=ws_headers,
                 ping_interval=None,
                 max_size=10*1024*1024,
                 close_timeout=5,

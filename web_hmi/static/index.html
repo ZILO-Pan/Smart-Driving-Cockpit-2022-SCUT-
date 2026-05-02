@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=3840, initial-scale=1.0">
+    <title>智慧驾驶座舱</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- 顶部状态栏 -->
+    <header class="status-bar">
+        <div class="status-left">
+            <span class="badge" id="carla-status">CARLA 已连接</span>
+            <span class="badge" id="ai-status">AI 就绪</span>
+        </div>
+        <div class="status-center">
+            <span class="system-title">智慧驾驶座舱 · 端云协同多模态主动服务系统</span>
+        </div>
+        <div class="status-right">
+            <span class="badge" id="cloud-status">云端在线</span>
+            <span class="time" id="clock">--:--</span>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="cockpit-main">
+        <!-- 左区：车辆仪表 -->
+        <section class="panel panel-vehicle">
+            <h3>车辆状态</h3>
+            <div class="gauge-group">
+                <div class="gauge">
+                    <div class="gauge-value" id="speed-value">0</div>
+                    <div class="gauge-label">km/h</div>
+                </div>
+                <div class="gauge">
+                    <div class="gauge-value" id="gear-value">P</div>
+                    <div class="gauge-label">档位</div>
+                </div>
+                <div class="gauge">
+                    <div class="gauge-value" id="steer-value">0°</div>
+                    <div class="gauge-label">转向角</div>
+                </div>
+            </div>
+            <div class="info-row">
+                <span class="chip" id="autopilot-chip">自动驾驶</span>
+                <span class="chip" id="scene-chip">默认场景</span>
+            </div>
+            <!-- 座舱控制 -->
+            <h3>座舱控制</h3>
+            <div class="cabin-controls">
+                <div class="control-item">
+                    <span>空调温度</span>
+                    <span class="control-value" id="ac-temp">24°C</span>
+                </div>
+                <div class="control-item">
+                    <span>座椅通风</span>
+                    <span class="control-value" id="seat-vent">关</span>
+                </div>
+                <div class="control-item">
+                    <span>车窗</span>
+                    <span class="control-value" id="window-state">关闭</span>
+                </div>
+                <div class="control-item">
+                    <span>氛围灯</span>
+                    <span class="control-value" id="ambient-light">柔白</span>
+                </div>
+                <div class="control-item">
+                    <span>座舱模式</span>
+                    <span class="control-value" id="cabin-mode">标准</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 中区：导航/ADS可视化 -->
+        <section class="panel panel-center">
+            <h3>导航 / 驾驶可视化</h3>
+            <div class="ads-slot" id="ads-slot">
+                <div class="ads-placeholder">
+                    <div class="ads-icon">&#x1F697;</div>
+                    <p>Unity WebGL / ADS 可视化预留区域</p>
+                    <p class="ads-sub">未来嵌入 3D 自动驾驶环境渲染</p>
+                </div>
+            </div>
+            <div class="nav-info">
+                <span id="nav-dest">目的地：未设置</span>
+                <span id="nav-eta">预计到达：--</span>
+            </div>
+        </section>
+
+        <!-- 右区：AI 助手 + 服务面板 -->
+        <section class="panel panel-ai">
+            <h3>AI 助手 · 小驾</h3>
+            <div class="ai-chat" id="ai-chat">
+                <div class="chat-msg system">系统已就绪，可以语音或文字交互</div>
+            </div>
+            <div class="ai-input-row">
+                <input type="text" id="user-input" placeholder="输入指令或问题..." />
+                <button id="send-btn">发送</button>
+            </div>
+            <div class="ai-context">
+                <span class="context-label">意图识别：</span>
+                <span class="context-value" id="intent-display">等待输入</span>
+                <span class="context-label">置信度：</span>
+                <span class="context-value" id="confidence-display">--</span>
+            </div>
+
+            <!-- 用户状态感知 -->
+            <h3>用户状态感知</h3>
+            <div class="user-state-chips">
+                <span class="chip" id="emotion-chip">情绪：正常</span>
+                <span class="chip" id="fatigue-chip">疲劳：否</span>
+                <span class="chip" id="thermal-chip">体感：适宜</span>
+            </div>
+
+            <!-- 服务卡片 -->
+            <h3>生活服务</h3>
+            <div class="service-cards" id="service-cards">
+                <div class="service-card" data-service="flight">机票</div>
+                <div class="service-card" data-service="milktea">奶茶</div>
+                <div class="service-card" data-service="news">新闻</div>
+                <div class="service-card" data-service="video">视频</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 底部功能坞 -->
+    <footer class="function-dock">
+        <div class="dock-item active">语音对话</div>
+        <div class="dock-item active">模糊意图</div>
+        <div class="dock-item active">主动推荐</div>
+        <div class="dock-item active">多模态感知</div>
+        <div class="dock-item active">舱驾联动</div>
+        <div class="dock-item active">端云协同</div>
+        <div class="dock-item active">可解释HMI</div>
+        <div class="dock-item active">座舱控制</div>
+        <div class="dock-item active">语音驾控</div>
+        <div class="dock-item active">生活服务</div>
+        <div class="dock-item active">语义知识库</div>
+    </footer>
+
+    <!-- Demo 触发按钮 -->
+    <div class="demo-triggers" id="demo-triggers">
+        <button data-scenario="好热啊">热 → 空调</button>
+        <button data-scenario="我有点难过">难过 → 陪伴</button>
+        <button data-scenario="帮我换到左车道">换道</button>
+        <button data-scenario="去机场">导航</button>
+        <button data-scenario="帮我订一张去上海的机票">订机票</button>
+        <button data-scenario="我想喝奶茶">奶茶</button>
+        <button data-scenario="看一下今天新闻">新闻</button>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

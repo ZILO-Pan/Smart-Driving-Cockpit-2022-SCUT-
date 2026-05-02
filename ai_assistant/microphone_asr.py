@@ -91,7 +91,7 @@ class MicrophoneASR:
         try:
             async with websockets.connect(
                 settings.ASR_WS_URL,
-                extra_headers=headers,
+                additional_headers=headers,
                 max_size=10 * 1024 * 1024
             ) as ws:
                 # 建连

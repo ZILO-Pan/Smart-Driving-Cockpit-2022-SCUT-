@@ -1,0 +1,17 @@
+# 核心
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-dotenv>=1.0.0
+websockets>=12.0
+
+# CARLA 相关
+pygame>=2.5.0
+numpy>=1.24.0
+
+# AI 助手
+requests>=2.28.0
+pyaudio>=0.2.13
+Pillow>=9.0.0
+
+# CARLA Python API (需单独安装)
+# pip install carla==0.9.15
