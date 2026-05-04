@@ -21,7 +21,13 @@
       "Bash(taskkill //F //IM python.exe)",
       "Bash(git commit *)",
       "Bash(git rm *)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(timeout 3 bash -c 'cat \"C:\\\\Users\\\\Pzl\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\e-------smart-cockpit\\\\c76962d6-f892-4733-9a47-74d7c53aabe1\\\\tasks\\\\b2v0mg5sn.output\"')",
+      "Bash(python -c \"from edge.hmi_server.server import start_server; print\\('import ok'\\)\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 3232 //F)",
+      "Bash(taskkill //PID 17348 //F)",
+      "Bash(timeout 3)"
     ],
     "additionalDirectories": [
       "e:\\归档作业\\smart_cockpit\\Arduino"
