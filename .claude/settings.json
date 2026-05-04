@@ -8,7 +8,20 @@
       "Bash(xargs rm *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git -c http.proxy=\"\" -c https.proxy=\"\" push origin main)"
+      "Bash(git -c http.proxy=\"\" -c https.proxy=\"\" push origin main)",
+      "Bash(git log *)",
+      "Bash(git rebase *)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter 'sed \"/Co-Authored-By/d\"' b462cac~..HEAD)",
+      "Bash(git stash *)",
+      "Bash(git -c http.proxy=\"\" -c https.proxy=\"\" push origin main --force)",
+      "Bash(python main.py --hmi-only)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/static/index.html)",
+      "Bash(curl -s http://localhost:8080/static/index.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(git commit *)",
+      "Bash(git rm *)",
+      "Bash(git reset *)"
     ],
     "additionalDirectories": [
       "e:\\归档作业\\smart_cockpit\\Arduino"

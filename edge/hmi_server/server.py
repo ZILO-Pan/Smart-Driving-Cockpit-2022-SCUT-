@@ -9,9 +9,9 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from config import settings
 from edge.state.vehicle_state import VehicleStateManager
@@ -19,6 +19,37 @@ from edge.state.vehicle_state import VehicleStateManager
 app = FastAPI(title="Smart Cockpit HMI")
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "hmi" / "static"
+
+
+@app.get("/static/unity/{path:path}")
+async def serve_unity_files(path: str):
+    """Serve Unity WebGL .gz files with correct Content-Encoding headers."""
+    file_path = STATIC_DIR / "unity" / path
+    if not file_path.exists():
+        return Response(status_code=404)
+
+    if str(file_path).endswith('.framework.js.gz'):
+        return Response(
+            content=file_path.read_bytes(),
+            media_type='application/javascript',
+            headers={'Content-Encoding': 'gzip'}
+        )
+    elif str(file_path).endswith('.wasm.gz'):
+        return Response(
+            content=file_path.read_bytes(),
+            media_type='application/wasm',
+            headers={'Content-Encoding': 'gzip'}
+        )
+    elif str(file_path).endswith('.data.gz'):
+        return Response(
+            content=file_path.read_bytes(),
+            media_type='application/octet-stream',
+            headers={'Content-Encoding': 'gzip'}
+        )
+
+    return FileResponse(str(file_path))
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 _state_manager: VehicleStateManager = None

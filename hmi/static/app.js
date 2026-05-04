@@ -1,183 +1,134 @@
-/**
- * 智慧驾驶座舱 HMI 前端
- * WebSocket 连接后端，实时更新车辆/座舱状态
- */
+(function () {
+    const CANVAS_W = 3840;
+    const CANVAS_H = 590;
 
-let ws = null;
-let reconnectTimer = null;
-
-function connect() {
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${location.host}/ws`);
-
-    ws.onopen = () => {
-        console.log('[WS] 已连接');
-        document.getElementById('cloud-status').textContent = '云端在线';
-        document.getElementById('cloud-status').style.borderColor = '#10b981';
-        document.getElementById('cloud-status').style.color = '#10b981';
-    };
-
-    ws.onclose = () => {
-        console.log('[WS] 断开，3秒后重连...');
-        document.getElementById('cloud-status').textContent = '已断开';
-        document.getElementById('cloud-status').style.borderColor = '#ef4444';
-        document.getElementById('cloud-status').style.color = '#ef4444';
-        reconnectTimer = setTimeout(connect, 3000);
-    };
-
-    ws.onerror = () => {};
-
-    ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        handleMessage(msg);
-    };
-}
-
-function handleMessage(msg) {
-    switch (msg.type) {
-        case 'state_update':
-            updateVehicleState(msg.vehicle);
-            updateCabinState(msg.cabin);
-            break;
-        case 'ai_reply':
-            appendChat('user', msg.user);
-            appendChat('assistant', msg.reply);
-            break;
-        case 'service_action':
-            handleServiceAction(msg);
-            break;
-        case 'intent_update':
-            updateIntent(msg);
-            break;
+    function scaleCanvas() {
+        const canvas = document.getElementById('canvas');
+        if (!canvas) return;
+        const scaleX = window.innerWidth / CANVAS_W;
+        const scaleY = window.innerHeight / CANVAS_H;
+        const scale = Math.min(scaleX, scaleY);
+        canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
     }
-}
 
-function updateVehicleState(v) {
-    if (!v) return;
-    document.getElementById('speed-value').textContent = Math.round(v.speed_kmh || 0);
-    document.getElementById('steer-value').textContent = ((v.steer || 0) * 540).toFixed(0) + '°';
+    // Unity overlay toggle — click logo to open/close
+    const logoBtn = document.getElementById('car-logo-btn');
+    const overlay = document.getElementById('unity-overlay');
+    let unityLoaded = false;
 
-    const gear = v.gear || 0;
-    let gearText = 'P';
-    if (v.is_reverse) gearText = 'R';
-    else if (gear > 0) gearText = 'D' + gear;
-    else if (gear === 0 && (v.speed_kmh || 0) > 1) gearText = 'D';
-    document.getElementById('gear-value').textContent = gearText;
-
-    const apChip = document.getElementById('autopilot-chip');
-    if (v.autopilot_enabled) {
-        apChip.classList.add('active');
-        apChip.textContent = '自动驾驶中';
-    } else {
-        apChip.classList.remove('active');
-        apChip.textContent = '手动驾驶';
-    }
-}
-
-function updateCabinState(cabin) {
-    if (!cabin || Object.keys(cabin).length === 0) return;
-    if (cabin.ac_temperature !== undefined)
-        document.getElementById('ac-temp').textContent = cabin.ac_temperature + '°C';
-    if (cabin.seat_ventilation !== undefined)
-        document.getElementById('seat-vent').textContent = cabin.seat_ventilation ? '开' : '关';
-    if (cabin.window_open !== undefined)
-        document.getElementById('window-state').textContent = cabin.window_open ? '开启' : '关闭';
-    if (cabin.ambient_light !== undefined)
-        document.getElementById('ambient-light').textContent = cabin.ambient_light;
-    if (cabin.cabin_mode !== undefined)
-        document.getElementById('cabin-mode').textContent = cabin.cabin_mode;
-    if (cabin.user_emotion !== undefined)
-        document.getElementById('emotion-chip').textContent = '情绪：' + cabin.user_emotion;
-    if (cabin.user_fatigue !== undefined)
-        document.getElementById('fatigue-chip').textContent = '疲劳：' + (cabin.user_fatigue ? '是' : '否');
-    if (cabin.thermal_comfort !== undefined)
-        document.getElementById('thermal-chip').textContent = '体感：' + cabin.thermal_comfort;
-}
-
-function updateIntent(msg) {
-    document.getElementById('intent-display').textContent = msg.intent || '--';
-    document.getElementById('confidence-display').textContent =
-        msg.confidence ? (msg.confidence * 100).toFixed(0) + '%' : '--';
-}
-
-function handleServiceAction(msg) {
-    const action = msg.action;
-    if (action === 'open_service_card') {
-        const cardType = msg.params?.service;
-        document.querySelectorAll('.service-card').forEach(c => c.classList.remove('active'));
-        const card = document.querySelector(`.service-card[data-service="${cardType}"]`);
-        if (card) card.classList.add('active');
-    }
-}
-
-function appendChat(role, text) {
-    const chat = document.getElementById('ai-chat');
-    const div = document.createElement('div');
-    div.className = 'chat-msg ' + role;
-    div.textContent = (role === 'user' ? '我：' : '小驾：') + text;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-
-    // 保持最近 20 条
-    while (chat.children.length > 20) {
-        chat.removeChild(chat.firstChild);
-    }
-}
-
-function sendUserInput(text) {
-    if (!text.trim()) return;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'user_input', text: text }));
-        appendChat('user', text);
-    }
-}
-
-// 发送按钮
-document.getElementById('send-btn').addEventListener('click', () => {
-    const input = document.getElementById('user-input');
-    sendUserInput(input.value);
-    input.value = '';
-});
-
-// 回车发送
-document.getElementById('user-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        sendUserInput(e.target.value);
-        e.target.value = '';
-    }
-});
-
-// Demo 触发按钮
-document.getElementById('demo-triggers').addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const scenario = btn.dataset.scenario;
-    if (scenario) sendUserInput(scenario);
-});
-
-// 服务卡片点击
-document.querySelectorAll('.service-card').forEach(card => {
-    card.addEventListener('click', () => {
-        const service = card.dataset.service;
-        const textMap = {
-            flight: '帮我订一张去上海的机票',
-            milktea: '我想喝奶茶',
-            news: '看一下今天新闻',
-            video: '刷会儿视频',
-        };
-        sendUserInput(textMap[service] || service);
+    logoBtn.addEventListener('click', () => {
+        const isOpen = overlay.classList.toggle('active');
+        logoBtn.classList.toggle('active', isOpen);
+        if (isOpen && !unityLoaded) {
+            loadUnity();
+            unityLoaded = true;
+        }
     });
-});
 
-// 时钟
-function updateClock() {
-    const now = new Date();
-    document.getElementById('clock').textContent =
-        now.getHours().toString().padStart(2, '0') + ':' +
-        now.getMinutes().toString().padStart(2, '0');
-}
-setInterval(updateClock, 10000);
-updateClock();
+    // Unity loading
+    function loadUnity() {
+        if (typeof createUnityInstance === 'undefined') {
+            const loading = document.getElementById('unity-loading');
+            const textEl = loading.querySelector('.unity-loading-text');
+            textEl.textContent = 'Unity Build not found. Place files in /static/unity/ai-car-scene/Build/';
+            return;
+        }
 
-// 启动连接
-connect();
+        const buildUrl = '/static/unity/ai-car-scene/Build';
+        const config = {
+            dataUrl: buildUrl + '/AI4HMI.data.gz',
+            frameworkUrl: buildUrl + '/AI4HMI.framework.js.gz',
+            codeUrl: buildUrl + '/AI4HMI.wasm.gz',
+            streamingAssetsUrl: '/static/unity/ai-car-scene/StreamingAssets',
+            companyName: 'DefaultCompany',
+            productName: 'AI4HMI',
+            productVersion: '1.0',
+        };
+
+        const unityCanvas = document.getElementById('unity-canvas');
+        const loading = document.getElementById('unity-loading');
+        const progressBar = document.getElementById('unity-progress-bar');
+
+        createUnityInstance(unityCanvas, config, (progress) => {
+            progressBar.style.width = (progress * 100) + '%';
+        }).then((instance) => {
+            window.unityInstance = instance;
+            loading.classList.add('hidden');
+            setTimeout(() => loading.remove(), 600);
+            setupHMIBridge(instance);
+        }).catch((err) => {
+            console.error('Unity load failed:', err);
+            const textEl = loading.querySelector('.unity-loading-text');
+            textEl.textContent = 'Failed to load 3D scene';
+        });
+    }
+
+    function setupHMIBridge(instance) {
+        window.HMI = {
+            sendCommand(action, target, params) {
+                if (!instance) return;
+                const cmd = {
+                    action: action,
+                    target: target || '',
+                    paramsJson: params ? JSON.stringify(params) : ''
+                };
+                instance.SendMessage('HMIController', 'ExecuteCommand', JSON.stringify(cmd));
+            },
+            switchCamera(view) { this.sendCommand('switchCamera', view); },
+            togglePart(partId) { this.sendCommand('togglePart', partId); },
+            openPart(partId) { this.sendCommand('openPart', partId); },
+            closePart(partId) { this.sendCommand('closePart', partId); },
+            rotateCarTo(angle) { this.sendCommand('rotateCar', 'absolute', { angle }); },
+            rotateCarBy(angle) { this.sendCommand('rotateCar', 'relative', { angle }); },
+            resetCarRotation() { this.sendCommand('rotateCar', 'reset'); },
+            getState() { this.sendCommand('getState', 'all'); },
+        };
+
+        window.HMIBus = {
+            listeners: [],
+            on(fn) { this.listeners.push(fn); },
+            emit(evt) { this.listeners.forEach(fn => fn(evt)); }
+        };
+    }
+
+    // Audio
+    const audioHello = new Audio('/static/videos/Hello.mp3');
+    const audioBye = new Audio('/static/videos/Bye.mp3');
+    let currentView = 'default';
+
+    window.OnUnityEvent = function (jsonStr) {
+        try {
+            const evt = JSON.parse(jsonStr);
+            console.log('[Unity Event]', evt);
+            if (window.HMIBus) window.HMIBus.emit(evt);
+
+            if (evt.eventType === 'cameraTransitionStart') {
+                if (currentView === 'astronaut' && evt.target !== 'astronaut') {
+                    audioBye.currentTime = 0;
+                    audioBye.play();
+                }
+            }
+
+            if (evt.eventType === 'cameraTransitionEnd') {
+                currentView = evt.target;
+                if (evt.target === 'astronaut') {
+                    audioHello.currentTime = 0;
+                    audioHello.play();
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse Unity event:', e);
+        }
+    };
+
+    function init() {
+        scaleCanvas();
+        window.addEventListener('resize', scaleCanvas);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();

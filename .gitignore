@@ -25,3 +25,9 @@ desktop.ini
 # Temp
 *.tmp
 *.log
+
+# Unity WebGL Build (too large for GitHub, keep local only)
+hmi/static/unity/
+
+# HMI videos (large media files)
+hmi/static/videos/*.mp4
