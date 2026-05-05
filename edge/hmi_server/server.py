@@ -57,6 +57,7 @@ _cabin_state = None
 _service_executor = None
 _ai_assistant = None
 _connected_clients: list[WebSocket] = []
+_road_map: list = None
 
 
 def set_dependencies(state_manager, cabin_state=None, service_executor=None, ai_assistant=None):
@@ -65,6 +66,11 @@ def set_dependencies(state_manager, cabin_state=None, service_executor=None, ai_
     _cabin_state = cabin_state
     _service_executor = service_executor
     _ai_assistant = ai_assistant
+
+
+def set_road_map(road_map: list):
+    global _road_map
+    _road_map = road_map
 
 
 @app.get("/")
@@ -76,6 +82,8 @@ async def index():
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     _connected_clients.append(ws)
+    if _road_map:
+        await ws.send_text(json.dumps({"type": "road_map", "segments": _road_map}, ensure_ascii=False))
     try:
         while True:
             data = await ws.receive_text()

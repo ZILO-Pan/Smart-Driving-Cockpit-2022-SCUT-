@@ -37,6 +37,15 @@ class VehicleState:
     autopilot_enabled: bool = True
     current_speed_limit: float = 0.0   # 当前路段限速
 
+    # ADAS 感知数据
+    nearby_vehicles: list = field(default_factory=list)
+    nearby_pedestrians: list = field(default_factory=list)
+    traffic_light_state: str = ""       # "Red"/"Yellow"/"Green"/""
+    traffic_light_distance: float = 0.0
+    lane_count: int = 3
+    ego_lane_index: int = 1
+    ego_waypoints: list = field(default_factory=list)
+
     # 时间戳
     timestamp: float = field(default_factory=time.time)
 

@@ -244,9 +244,12 @@ html, body {
     flex: 1;
     padding: 8px 12px 12px;
     min-height: 0;
+    position: relative;
+    overflow: hidden;
 }
 
 #adas-canvas {
+    display: block;
     width: 100%;
     height: 100%;
     border-radius: var(--radius-md);
@@ -256,40 +259,46 @@ html, body {
 
 .speed-card {
     flex: 0 0 auto;
-    padding: 12px 16px;
-    flex-direction: row;
+    padding: 14px 24px;
+}
+
+.speed-row {
+    display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 32px;
+    width: 100%;
 }
 
 .speed-display {
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 6px;
 }
 
 .speed-number {
     font-family: var(--font-display);
-    font-size: 36px;
+    font-size: 42px;
     font-weight: 400;
     letter-spacing: -0.02em;
 }
 
 .speed-unit {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-secondary);
     text-transform: uppercase;
 }
 
 .speed-meta {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
 }
 
 .gear-indicator {
     font-family: var(--font-display);
-    font-size: 20px;
+    font-size: 24px;
+    font-weight: 500;
     color: var(--accent-cyan);
 }
 
@@ -297,6 +306,69 @@ html, body {
     font-size: 13px;
     color: var(--text-secondary);
     font-family: var(--font-mono);
+}
+
+.drive-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 140px;
+}
+
+.drive-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bar-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    font-family: var(--font-mono);
+    width: 30px;
+    font-weight: 500;
+}
+
+.bar-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.1s ease;
+}
+
+.bar-fill-throttle {
+    background: var(--accent-cyan);
+    width: 0%;
+}
+
+.bar-fill-brake {
+    background: #ff6b6b;
+    width: 0%;
+}
+
+.steer-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.steer-icon {
+    font-size: 24px;
+    color: var(--accent-cyan);
+}
+
+.steer-value {
+    font-size: 16px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: var(--text-primary);
 }
 
 /* ─── Nav Card ─── */
@@ -538,18 +610,58 @@ html, body {
     display: none;
 }
 
-.bili-poster {
+.bili-poster-btn {
     height: 100%;
-    width: auto;
     flex-shrink: 0;
-    border-radius: 10px;
-    object-fit: cover;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: none;
     cursor: pointer;
+    border-radius: 10px;
+    overflow: hidden;
     transition: transform 0.2s;
 }
 
-.bili-poster:hover {
+.bili-poster-btn:hover {
     transform: scale(1.03);
+}
+
+.bili-poster-btn:active {
+    transform: scale(0.97);
+}
+
+.bili-poster {
+    height: 100%;
+    width: auto;
+    display: block;
+    border-radius: 10px;
+    object-fit: cover;
+    pointer-events: none;
+}
+
+/* ─── Bilibili iframe player ─── */
+
+.slot-card.bili-player-card {
+    flex: 4;
+    max-width: none;
+}
+
+.bili-player-inner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+}
+
+.bili-iframe {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-md);
+    border: none;
+    background: #000;
 }
 
 /* ─── Combo card (Music + Bilibili stacked) ─── */
@@ -624,85 +736,45 @@ html, body {
     top: -4px;
 }
 
-/* Parking mock UI */
-.parking-ui, .charging-ui {
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+/* ─── Three.js 3D Cards (Parking / Charging) ─── */
+
+.three-card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.three-canvas {
+    display: block;
+    width: 100%;
     height: 100%;
 }
 
-.parking-ui .card-title, .charging-ui .card-title {
-    margin-bottom: 4px;
-}
-
-.parking-slot-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    flex: 1;
-}
-
-.parking-slot {
-    border-radius: 6px;
-    background: rgba(77, 219, 143, 0.15);
-    border: 1px solid rgba(77, 219, 143, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: var(--success-green);
-}
-
-.parking-slot.occupied {
-    background: rgba(255, 59, 48, 0.1);
-    border-color: rgba(255, 59, 48, 0.3);
-    color: rgba(255, 59, 48, 0.7);
-}
-
-.charging-stations {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
-}
-
-.charging-station {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.station-icon {
-    font-size: 20px;
-}
-
-.station-info {
+.three-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    flex: 1;
+    background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%);
+    pointer-events: none;
 }
 
-.station-name {
-    font-size: 12px;
+.three-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    letter-spacing: 0.3px;
 }
 
-.station-detail {
+.three-sub {
     font-size: 10px;
-    color: var(--text-tertiary);
-}
-
-.station-status {
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 6px;
-    background: rgba(77, 219, 143, 0.12);
-    color: var(--success-green);
+    color: rgba(255,255,255,0.7);
 }
 
 /* ============================================
@@ -865,6 +937,79 @@ html, body {
 .service-item span {
     font-size: 10px;
     color: var(--text-secondary);
+}
+
+/* ============================================
+   Bilibili Select Panel (三级面板)
+   ============================================ */
+
+.bili-select-panel {
+    position: absolute;
+    bottom: 64px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    width: 560px;
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    z-index: 190;
+    padding: 16px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s var(--ease-out-expo);
+}
+
+.bili-select-panel.open {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateX(-50%) translateY(0);
+}
+
+.bili-select-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.bili-select-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.bili-select-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+}
+
+.bili-select-item {
+    aspect-ratio: 3/4;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.bili-select-item:hover {
+    transform: scale(1.05);
+    border-color: var(--accent-cyan);
+}
+
+.bili-select-item:active {
+    transform: scale(0.95);
+}
+
+.bili-select-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 /* ============================================

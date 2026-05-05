@@ -67,12 +67,17 @@ class SmartCockpitApp:
 
         # 3. Web HMI 服务端（边缘端）
         if use_web_hmi:
-            from edge.hmi_server.server import start_server
+            from edge.hmi_server.server import start_server, set_road_map
             self.web_hmi_thread = start_server(
                 self.state_manager,
                 cabin_state=self.cabin_state,
                 service_executor=self.service_executor,
             )
+            # 路网数据（一次性推送给前端）
+            if self.carla_bridge:
+                set_road_map(self.carla_bridge.get_road_map())
+            else:
+                set_road_map(self._build_mock_road_map())
 
         # 4. AI 助手 + 服务 Agent（云端）
         if use_ai:
@@ -108,14 +113,100 @@ class SmartCockpitApp:
         else:
             self._idle_loop()
 
+    def _build_mock_road_map(self):
+        """构建 Mock 模式的静态路网（世界坐标）"""
+        import math
+        road_map = []
+        # 主路 3 车道，从 y=-100 到 y=200，带微弱弯曲
+        for lane_offset in [-3.5, 0, 3.5]:
+            seg = []
+            for i in range(120):
+                y = -100 + i * 2.5
+                curve = math.sin(y * 0.005) * 8
+                seg.append({
+                    'x': round(curve + lane_offset, 2),
+                    'y': round(y, 2),
+                    'hw': 1.75,
+                    'rx': 1.0, 'ry': 0.0,
+                })
+            road_map.append(seg)
+        # 横向道路（十字路口）2 车道
+        for lane_offset in [-1.75, 1.75]:
+            seg = []
+            for i in range(40):
+                x = -50 + i * 2.5
+                seg.append({
+                    'x': round(x, 2),
+                    'y': round(75.0 + lane_offset, 2),
+                    'hw': 1.75,
+                    'rx': 0.0, 'ry': 1.0,
+                })
+            road_map.append(seg)
+        print(f"[MAIN] Mock 路网: {len(road_map)} 段, {sum(len(s) for s in road_map)} 点")
+        return road_map
+
     def _start_mock_state(self):
         import math
+        import random
 
         def _mock_loop():
             t = 0
+            mock_cars = [
+                {'base_x': 3.5, 'base_z': 20, 'speed': 70, 'w': 1.9, 'l': 4.5, 'h': 1.5, 'type': 'car'},
+                {'base_x': -3.5, 'base_z': 35, 'speed': 65, 'w': 2.0, 'l': 4.8, 'h': 1.6, 'type': 'car'},
+                {'base_x': 0, 'base_z': -15, 'speed': 80, 'w': 0.6, 'l': 1.8, 'h': 1.7, 'type': 'bike'},
+                {'base_x': 3.5, 'base_z': -30, 'speed': 55, 'w': 2.5, 'l': 5.5, 'h': 2.0, 'type': 'truck'},
+                {'base_x': -3.5, 'base_z': 50, 'speed': 72, 'w': 0.7, 'l': 2.0, 'h': 1.8, 'type': 'bike'},
+            ]
+            mock_peds = [
+                {'base_x': 6, 'base_z': 25, 'crossing': True},
+                {'base_x': -8, 'base_z': 40, 'crossing': False},
+            ]
+            # 模拟自车世界位置沿主路行驶
+            ego_world_x = 0.0
+            ego_world_y = 0.0
+            ego_yaw = 0.0  # 朝 +Y 方向行驶
+
             while True:
                 speed = 60 + 20 * math.sin(t * 0.1)
                 steer = 0.3 * math.sin(t * 0.2)
+
+                # 自车世界位置更新（模拟向前行驶）
+                ego_world_y += speed / 3.6 * (1.0 / settings.VEHICLE_STATE_HZ)
+                ego_world_x = math.sin(ego_world_y * 0.005) * 8
+                ego_yaw = math.atan2(math.cos(ego_world_y * 0.005) * 8 * 0.005, 1.0)
+
+                nearby_vehicles = []
+                for idx, c in enumerate(mock_cars):
+                    nearby_vehicles.append({
+                        'id': 1000 + idx,
+                        'x': round(c['base_x'] + math.sin(t * 0.05) * 0.3, 1),
+                        'z': round(c['base_z'] + math.sin(t * 0.03 + c['base_z']) * 2, 1),
+                        'speed': round(c['speed'] + math.sin(t * 0.08) * 5, 1),
+                        'heading': round(math.sin(t * 0.02) * 3, 1),
+                        'w': c['w'], 'l': c['l'], 'h': c['h'],
+                        'type': c['type'],
+                    })
+
+                nearby_pedestrians = []
+                for idx, p in enumerate(mock_peds):
+                    nearby_pedestrians.append({
+                        'id': 2000 + idx,
+                        'x': round(p['base_x'] + math.sin(t * 0.1) * 2, 1),
+                        'z': round(p['base_z'] + math.cos(t * 0.06) * 1, 1),
+                        'speed': round(1.2 + math.sin(t * 0.1) * 0.3, 1),
+                        'crossing': p['crossing'],
+                    })
+
+                tl_state = ""
+                tl_distance = 0.0
+
+                # 模拟 waypoint 路线（前方 40 个点，每 3m）
+                ego_waypoints = []
+                for i in range(1, 41):
+                    fwd_dist = i * 3.0
+                    ego_waypoints.append({'x': 0.0, 'z': round(fwd_dist, 1)})
+
                 self.state_manager.update(
                     speed_kmh=speed,
                     throttle=0.5,
@@ -125,12 +216,22 @@ class SmartCockpitApp:
                     is_reverse=False,
                     autopilot_enabled=True,
                     wheel_angle_deg=steer * 540,
+                    location_x=ego_world_x,
+                    location_y=ego_world_y,
+                    rotation_yaw=math.degrees(ego_yaw),
+                    nearby_vehicles=nearby_vehicles,
+                    nearby_pedestrians=nearby_pedestrians,
+                    traffic_light_state=tl_state,
+                    traffic_light_distance=tl_distance,
+                    lane_count=3,
+                    ego_lane_index=1,
+                    ego_waypoints=ego_waypoints,
                 )
                 t += 1
                 time.sleep(1.0 / settings.VEHICLE_STATE_HZ)
 
         threading.Thread(target=_mock_loop, daemon=True).start()
-        print("[MAIN] Mock 车辆状态已启动")
+        print("[MAIN] Mock 车辆状态已启动（含 ADAS 感知模拟）")
 
     def _idle_loop(self):
         print("[MAIN] 空闲循环中（Ctrl+C 退出）")

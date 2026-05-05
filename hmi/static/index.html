@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Active Cabin OS</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=8">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&display=swap" rel="stylesheet">
@@ -46,10 +46,8 @@
                     </span>
                 </div>
                 <div class="top-bar-center">
-                    <span class="top-status-item" id="main-speed">89 km/h</span>
                 </div>
                 <div class="top-bar-right">
-                    <span class="top-status-item" id="main-temp">28°C</span>
                     <span class="top-status-item" id="main-time"></span>
                 </div>
             </div>
@@ -68,13 +66,29 @@
                         </div>
                     </div>
                     <div class="glass-card speed-card">
-                        <div class="speed-display">
-                            <span class="speed-number" id="speed-number">89</span>
-                            <span class="speed-unit">km/h</span>
-                        </div>
-                        <div class="speed-meta">
-                            <span class="gear-indicator">D</span>
-                            <span class="power-value" id="power-value">63 kW</span>
+                        <div class="speed-row">
+                            <div class="speed-display">
+                                <span class="speed-number" id="speed-number">89</span>
+                                <span class="speed-unit">km/h</span>
+                            </div>
+                            <div class="speed-meta">
+                                <span class="gear-indicator" id="gear-indicator">D</span>
+                                <span class="power-value" id="power-value">63 kW</span>
+                            </div>
+                            <div class="drive-bars">
+                                <div class="drive-bar throttle-bar">
+                                    <span class="bar-label">THR</span>
+                                    <div class="bar-track"><div class="bar-fill bar-fill-throttle" id="throttle-fill"></div></div>
+                                </div>
+                                <div class="drive-bar brake-bar">
+                                    <span class="bar-label">BRK</span>
+                                    <div class="bar-track"><div class="bar-fill bar-fill-brake" id="brake-fill"></div></div>
+                                </div>
+                            </div>
+                            <div class="steer-display">
+                                <span class="steer-icon">⟳</span>
+                                <span class="steer-value" id="steer-value">0°</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -190,6 +204,19 @@
             </div>
         </div>
 
+        <!-- Bilibili 视频选择面板（三级面板） -->
+        <div class="bili-select-panel" id="bili-select-panel">
+            <div class="bili-select-header">
+                <span class="bili-select-title">Bilibili · Select Video</span>
+                <button class="service-close-btn" id="bili-select-close">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="bili-select-grid" id="bili-select-grid"></div>
+        </div>
+
         <!-- 待机锁屏 -->
         <div class="lockscreen" id="lockscreen">
             <img class="lockscreen-bg" src="/static/wallpaper/9e84f9358b77a634fb1d2751f8a8731.png" alt="">
@@ -203,6 +230,7 @@
     </div>
 
     <script src="/static/unity/ai-car-scene/Build/AI4HMI.loader.js" onerror="console.warn('Unity loader not found, 3D scene unavailable')"></script>
-    <script src="/static/app.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="/static/app.js?v=29"></script>
 </body>
 </html>

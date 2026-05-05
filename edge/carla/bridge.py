@@ -519,7 +519,9 @@ class CarlaBridge:
 
     def _spawn_ego_vehicle(self):
         bp_lib = self.world.get_blueprint_library()
-        tesla_bp = bp_lib.find('vehicle.tesla.model3')
+        ego_bp = bp_lib.find('vehicle.mercedes.coupe_2020')
+        if ego_bp.has_attribute('color'):
+            ego_bp.set_attribute('color', '255,255,255')
         spawn_points = self.world.get_map().get_spawn_points()
 
         if not spawn_points:
@@ -527,10 +529,10 @@ class CarlaBridge:
             sys.exit(1)
 
         random.shuffle(spawn_points)
-        self.vehicle = self.world.spawn_actor(tesla_bp, spawn_points[0])
+        self.vehicle = self.world.spawn_actor(ego_bp, spawn_points[0])
         self.vehicle.set_autopilot(True, 8000)
         self._spawn_points = spawn_points
-        print("[CARLA] Tesla Model 3 已生成")
+        print("[CARLA] Mercedes AMG GT Coupe (白) 已生成")
 
     def _spawn_npcs(self, count):
         bp_lib = self.world.get_blueprint_library()
@@ -996,7 +998,7 @@ class CarlaBridge:
             print(f"[CHAOS] 人群横穿失败: {e}")
 
     # ================================================================
-    #  车辆状态
+    #  车辆状态 + ADAS 感知
     # ================================================================
 
     def _update_vehicle_state(self):
@@ -1007,6 +1009,9 @@ class CarlaBridge:
         speed = 3.6 * (v.x ** 2 + v.y ** 2 + v.z ** 2) ** 0.5
         control = self.vehicle.get_control()
         transform = self.vehicle.get_transform()
+
+        # ADAS 感知数据
+        perception = self._collect_perception(transform)
 
         self.state_manager.update(
             speed_kmh=speed,
@@ -1023,7 +1028,200 @@ class CarlaBridge:
             rotation_roll=transform.rotation.roll,
             wheel_angle_deg=control.steer * 540.0,
             autopilot_enabled=True,
+            **perception,
         )
+
+    def _collect_perception(self, ego_transform):
+        """收集 ADAS 所需的周围环境感知数据"""
+        ego_loc = ego_transform.location
+        ego_yaw = math.radians(ego_transform.rotation.yaw)
+        ego_fwd_x = math.cos(ego_yaw)
+        ego_fwd_y = math.sin(ego_yaw)
+        # CARLA 左手坐标系：Y 轴向左递增，右向量 = (sin, -cos)
+        ego_right_x = math.sin(ego_yaw)
+        ego_right_y = -math.cos(ego_yaw)
+
+        # 每 10 帧刷新 actor 缓存
+        self._perception_frame = getattr(self, '_perception_frame', 0) + 1
+        if self._perception_frame % 10 == 1 or not hasattr(self, '_cached_actors'):
+            all_actors = self.world.get_actors()
+            self._cached_vehicles = list(all_actors.filter('vehicle.*'))
+            self._cached_walkers = list(all_actors.filter('walker.pedestrian.*'))
+
+        # --- 周围车辆 (80m 半径, 最多 15 辆, 含包围盒尺寸) ---
+        nearby_vehicles = []
+        for veh in self._cached_vehicles:
+            if veh.id == self.vehicle.id:
+                continue
+            veh_loc = veh.get_location()
+            dx = veh_loc.x - ego_loc.x
+            dy = veh_loc.y - ego_loc.y
+            dist_sq = dx * dx + dy * dy
+            if dist_sq > 6400:  # 80m^2
+                continue
+            local_z = dx * ego_fwd_x + dy * ego_fwd_y
+            local_x = dx * ego_right_x + dy * ego_right_y
+            veh_vel = veh.get_velocity()
+            veh_speed = 3.6 * (veh_vel.x ** 2 + veh_vel.y ** 2) ** 0.5
+            veh_yaw = veh.get_transform().rotation.yaw
+            heading_rel = veh_yaw - math.degrees(ego_yaw)
+            bb = veh.bounding_box.extent
+            # CARLA: extent.x=半车长, extent.y=半车宽, extent.z=半车高
+            n_wheels = int(veh.attributes.get('number_of_wheels', 4))
+            if n_wheels <= 2:
+                vtype = 'bike'
+            elif bb.x * 2 > 6.0:
+                vtype = 'truck'
+            else:
+                vtype = 'car'
+            nearby_vehicles.append({
+                'id': veh.id,
+                'x': round(local_x, 1),
+                'z': round(local_z, 1),
+                'speed': round(veh_speed, 1),
+                'heading': round(heading_rel, 1),
+                'w': round(bb.y * 2, 1),  # 车宽 (Three.js X轴)
+                'l': round(bb.x * 2, 1),  # 车长 (Three.js Z轴)
+                'h': round(bb.z * 2, 1),  # 车高
+                'type': vtype,
+            })
+        nearby_vehicles.sort(key=lambda v: v['x'] ** 2 + v['z'] ** 2)
+        nearby_vehicles = nearby_vehicles[:15]
+
+        # --- 周围行人 (50m 半径, 最多 10 人) ---
+        nearby_pedestrians = []
+        for walker in self._cached_walkers:
+            w_loc = walker.get_location()
+            dx = w_loc.x - ego_loc.x
+            dy = w_loc.y - ego_loc.y
+            dist_sq = dx * dx + dy * dy
+            if dist_sq > 2500:  # 50m^2
+                continue
+            local_z = dx * ego_fwd_x + dy * ego_fwd_y
+            local_x = dx * ego_right_x + dy * ego_right_y
+            w_vel = walker.get_velocity()
+            w_speed = (w_vel.x ** 2 + w_vel.y ** 2) ** 0.5
+            # 判断是否正在横穿（速度方向与自车前进方向大致垂直）
+            crossing = False
+            if w_speed > 0.3:
+                vel_dot_fwd = abs(w_vel.x * ego_fwd_x + w_vel.y * ego_fwd_y)
+                vel_dot_right = abs(w_vel.x * ego_right_x + w_vel.y * ego_right_y)
+                crossing = vel_dot_right > vel_dot_fwd
+            nearby_pedestrians.append({
+                'id': walker.id,
+                'x': round(local_x, 1),
+                'z': round(local_z, 1),
+                'speed': round(w_speed, 1),
+                'crossing': crossing,
+            })
+        nearby_pedestrians.sort(key=lambda p: p['x'] ** 2 + p['z'] ** 2)
+        nearby_pedestrians = nearby_pedestrians[:10]
+
+        # --- 红绿灯（仅当前路口停车时显示） ---
+        tl_state = ""
+        tl_distance = 0.0
+        try:
+            if self.vehicle.is_at_traffic_light():
+                tl = self.vehicle.get_traffic_light()
+                tl_state = str(tl.get_state()).split('.')[-1]
+                tl_loc = tl.get_location()
+                dx = tl_loc.x - ego_loc.x
+                dy = tl_loc.y - ego_loc.y
+                tl_distance = round(math.sqrt(dx * dx + dy * dy), 1)
+        except Exception:
+            pass
+
+        # --- 前方 waypoint 路线（局部坐标） ---
+        ego_waypoints = []
+        try:
+            carla_map = self.world.get_map()
+            wp = carla_map.get_waypoint(ego_loc, project_to_road=True)
+            for _ in range(40):
+                nexts = wp.next(3.0)
+                if not nexts:
+                    break
+                wp = nexts[0]
+                loc = wp.transform.location
+                dx = loc.x - ego_loc.x
+                dy = loc.y - ego_loc.y
+                lx = dx * ego_right_x + dy * ego_right_y
+                lz = dx * ego_fwd_x + dy * ego_fwd_y
+                ego_waypoints.append({'x': round(lx, 1), 'z': round(lz, 1)})
+        except Exception:
+            pass
+
+        # --- 车道信息 ---
+        lane_count = 3
+        ego_lane_index = 1
+        try:
+            carla_map = self.world.get_map()
+            ego_wp = carla_map.get_waypoint(ego_loc, project_to_road=True)
+            left_count = 0
+            wp = ego_wp
+            while True:
+                left_wp = wp.get_left_lane()
+                if left_wp is None or left_wp.lane_type != carla.LaneType.Driving:
+                    break
+                if left_wp.lane_id * ego_wp.lane_id < 0:
+                    break
+                left_count += 1
+                wp = left_wp
+            right_count = 0
+            wp = ego_wp
+            while True:
+                right_wp = wp.get_right_lane()
+                if right_wp is None or right_wp.lane_type != carla.LaneType.Driving:
+                    break
+                if right_wp.lane_id * ego_wp.lane_id < 0:
+                    break
+                right_count += 1
+                wp = right_wp
+            lane_count = 1 + left_count + right_count
+            ego_lane_index = left_count
+        except Exception:
+            pass
+
+        return {
+            'nearby_vehicles': nearby_vehicles,
+            'nearby_pedestrians': nearby_pedestrians,
+            'traffic_light_state': tl_state,
+            'traffic_light_distance': tl_distance,
+            'lane_count': lane_count,
+            'ego_lane_index': ego_lane_index,
+            'ego_waypoints': ego_waypoints,
+        }
+
+    def get_road_map(self):
+        """生成完整路网数据（世界坐标），启动时调用一次"""
+        carla_map = self.world.get_map()
+        all_wps = carla_map.generate_waypoints(2.5)
+
+        segments = {}  # (road_id, lane_id) → list of points
+        for wp in all_wps:
+            loc = wp.transform.location
+            yaw = math.radians(wp.transform.rotation.yaw)
+            rx = math.sin(yaw)
+            ry = -math.cos(yaw)
+            key = (wp.road_id, wp.lane_id)
+            if key not in segments:
+                segments[key] = []
+            segments[key].append({
+                'x': round(loc.x, 2),
+                'y': round(loc.y, 2),
+                'hw': round(wp.lane_width / 2, 2),
+                'rx': round(rx, 3),
+                'ry': round(ry, 3),
+            })
+
+        road_map = []
+        for key, pts in segments.items():
+            if len(pts) < 2:
+                continue
+            pts.sort(key=lambda p: p['x'] * 0.001 + p['y'])
+            road_map.append(pts)
+
+        print(f"[CARLA] 路网已生成: {len(road_map)} 段, {sum(len(s) for s in road_map)} 点")
+        return road_map
 
     def get_latest_frame(self):
         with self._latest_frame_lock:
