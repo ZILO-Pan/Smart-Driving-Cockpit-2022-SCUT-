@@ -36,18 +36,18 @@ except ImportError:
 
 # 火山引擎 IAM 访问密钥（控制台 → 右上角头像 → API访问密钥）
 # 如果你没有，去这里创建: https://console.volcengine.com/iam/keymanage/
-VOLC_ACCESS_KEY_ID = os.getenv("VOLC_ACCESS_KEY_ID", "")
-VOLC_SECRET_ACCESS_KEY = os.getenv("VOLC_SECRET_ACCESS_KEY", "")
+VOLC_ACCESS_KEY_ID = "YOUR_VOLC_ACCESS_KEY_ID"      # 类似 AKLTxxxxx 或其他格式
+VOLC_SECRET_ACCESS_KEY = "YOUR_VOLC_SECRET_KEY"  # 对应的 Secret Key
 
 # RTC 应用信息
-RTC_APP_ID = os.getenv("RTC_APP_ID", "")
+RTC_APP_ID = "YOUR_RTC_APP_ID"
 
 # 端到端语音服务信息
-S2S_APP_ID = os.getenv("S2S_APP_ID", "")
-S2S_ACCESS_TOKEN = os.getenv("S2S_ACCESS_TOKEN", "")
+S2S_APP_ID = "3121922445"
+S2S_ACCESS_TOKEN = "YOUR_ACCESS_TOKEN"
 
 # 火山方舟 (LLM for Function Calling in hybrid mode)
-ARK_ENDPOINT_ID = os.getenv("ARK_ENDPOINT_ID", "")
+ARK_ENDPOINT_ID = "YOUR_ENDPOINT_ID"
 
 # ============================================================
 

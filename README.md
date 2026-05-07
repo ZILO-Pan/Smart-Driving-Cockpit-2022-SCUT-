@@ -2,183 +2,163 @@
 
 > 面向舱驾一体场景的端云协同多模态智能座舱主动服务系统设计研究
 
-## 系统定位
+## 系统架构
 
-**一个端云协同的多模态主动服务原型，面向舱驾一体化场景。**
+```
+┌─────────────────────────────────────────────────────────┐
+│  浏览器 HMI（3840×590 超宽屏）                           │
+│  ┌──────────┬──────────────┬───────────────┐            │
+│  │ ADAS 3D  │  导航/Unity  │  座舱卡片/服务 │            │
+│  └──────────┴──────────────┴───────────────┘            │
+│  + NOVA 语音助手 (RTC SDK + 唤醒词)                      │
+└────────────────────┬────────────────────────────────────┘
+                     │ WebSocket + REST API
+┌────────────────────┴────────────────────────────────────┐
+│  FastAPI 后端（edge/hmi_server/）                         │
+│  - 车辆状态推送 (30Hz)                                    │
+│  - 语音 API (/api/voice/start|stop|token|fc-execute)     │
+│  - 唤醒词 WebSocket (/ws/wake)                           │
+└────────────────────┬────────────────────────────────────┘
+                     │
+┌────────────────────┴────────────────────────────────────┐
+│  火山引擎云服务                                           │
+│  - RTC 房间（S2S 端到端语音模型）                          │
+│  - 方舟 LLM（Function Calling）                          │
+│  - ASR 流式识别（唤醒词检测用）                            │
+└─────────────────────────────────────────────────────────┘
+                     │
+┌────────────────────┴────────────────────────────────────┐
+│  CARLA 仿真器 / Mock 数据                                │
+│  - 车辆状态、周围车辆、路网、红绿灯                        │
+└─────────────────────────────────────────────────────────┘
+```
 
-- CARLA 模拟器代表驾驶侧（Mercedes AMG GT Coupe 白色主车）
-- HTML 超宽屏（3840×590）作为 HMI 主界面
-- Unity WebGL 提供 3D 交互可视化场景
-- 火山引擎/豆包提供云端智能：语音、对话、多模态理解、服务编排
-- 边缘端执行 CARLA 控制、HMI 渲染、座舱状态管理、安全策略
+## 启动方式
 
-## 项目架构
+```bash
+# 标准模式：Mock 数据 + Web HMI + NOVA 语音
+python main.py --web-hmi --mock-carla
+
+# 连接 CARLA 仿真器
+python main.py --web-hmi
+
+# 仅 HMI（无 AI 无 CARLA）
+python main.py --hmi-only
+
+# 旧版本地语音（PyAudio，需 --legacy-voice）
+python main.py --web-hmi --mock-carla --legacy-voice
+```
+
+## 目录结构（当前活跃）
 
 ```
 smart_cockpit/
-├── main.py                          # 主入口 - 多模式启动
+├── main.py                          # 主入口
 ├── config/
 │   └── settings.py                  # 全局配置（从 .env 加载）
 │
-├── edge/                            # ===== 边缘端 =====
-│   ├── carla/
-│   │   └── bridge.py                # CARLA 仿真桥接 + ADAS 感知 + 路网生成
-│   ├── state/
-│   │   ├── vehicle_state.py         # 车辆状态数据模型
-│   │   ├── cabin_state.py           # 座舱状态
-│   │   └── service_executor.py      # 服务执行器
-│   └── hmi_server/
-│       └── server.py                # FastAPI + WebSocket + 路网推送
+├── cloud/voice/
+│   └── rtc_service.py               # 火山 RTC API（Start/Stop/Update VoiceChat + Token）
 │
-├── cloud/                           # ===== 云端 =====
-│   ├── agent/
-│   │   ├── assistant_manager.py     # AI 助手编排器
-│   │   └── service_agent.py         # 服务编排 Agent
-│   ├── chat/
-│   │   └── doubao_chat.py           # 豆包大模型对话 + 视觉理解
-│   ├── vision/
-│   │   └── doubao_vision.py         # 视觉观察模块
-│   └── voice/
-│       ├── microphone_asr.py        # 火山引擎 ASR
-│       └── speaker_tts.py           # 火山引擎 TTS
+├── edge/hmi_server/
+│   ├── server.py                    # FastAPI 主服务 + WebSocket 状态推送
+│   ├── voice_api.py                 # 语音 API 路由（/api/voice/*）+ FC 执行
+│   └── wake_ws.py                   # 唤醒词 WebSocket（/ws/wake）
 │
-├── hmi/                             # ===== HMI 前端 =====
-│   └── static/
-│       ├── index.html               # 3840×590 超宽座舱界面
-│       ├── styles.css               # 车规级深色主题样式
-│       ├── app.js                   # 主逻辑 + Three.js ADAS + Unity Bridge
-│       ├── fonts/                   # MB Corpo 字体
-│       ├── videos/                  # 壁纸视频 + 音频
-│       └── unity/                   # Unity WebGL Build 产物（本地）
+├── edge/state/
+│   ├── vehicle_state.py             # 车辆状态管理（速度/转向/ADAS感知）
+│   ├── cabin_state.py               # 座舱状态管理（空调/氛围灯/模式）
+│   └── service_executor.py          # FC 执行器（WebSocket 广播动作给前端）
 │
-├── handoff/                         # 交接文档
-├── communication/                   # TCP 通信（保留兼容 Unity 原生）
-├── .env                             # 密钥配置（不提交）
+├── edge/carla/
+│   └── bridge.py                    # CARLA 仿真器桥接
+│
+├── hmi/static/
+│   ├── index.html                   # HMI 主页面
+│   ├── app.js                       # HMI 核心逻辑 + _executeFCAction
+│   ├── styles.css                   # 样式
+│   ├── voice.js                     # NOVA 语音前端（RTC + 唤醒词 + FC）
+│   ├── wake-processor.js            # AudioWorklet VAD 处理器
+│   ├── volc-rtc.min.js              # 火山 RTC SDK
+│   └── unity/                       # Unity WebGL 3D 场景
+│
+├── .env                             # 密钥（不入库）
 ├── .env.example                     # 密钥模板
-├── requirements.txt                 # Python 依赖
-└── COMMANDS.md                      # 常用命令速查
+└── VOICE_ISSUE_REPORT.md            # 当前语音问题排查报告
 ```
 
-## 核心数据流
+## 可以删除的旧文件
 
-```
-┌─────────────── 云端 (Cloud) ───────────────┐
-│                                             │
-│  语音输入 → ASR → 服务Agent → TTS输出       │
-│                    ↕                        │
-│            豆包大模型推理                     │
-│         (意图/编排/视觉/对话)                │
-│                                             │
-├─────────────── 边缘端 (Edge) ──────────────┤
-│                                             │
-│  CARLA仿真 → 车辆状态 → WebSocket 10Hz     │
-│                ↕                            │
-│         路网数据（启动时一次性推送）           │
-│                ↕                            │
-│         ADAS 感知（车辆/行人/红绿灯）        │
-│                ↕                            │
-│         服务执行器                           │
-│    (Agent指令→座舱/驾驶/Unity动作)          │
-│                                             │
-├─────────────── HMI 前端 ───────────────────┤
-│                                             │
-│  3840×590 超宽屏 HTML 界面                  │
-│  视频壁纸 | Unity 3D | ADAS | AI助手        │
-│                                             │
-└─────────────────────────────────────────────┘
-```
+以下文件属于**旧 TTS/ASR 本地语音方案**（PyAudio + pygame + 火山 TTS/ASR WebSocket），已被 RTC 端到端方案替代：
 
-## ADAS 实时可视化
+| 文件 | 用途（已废弃） |
+|------|----------------|
+| `cloud/voice/microphone_asr.py` | 本地 PyAudio 录音 + 火山 ASR WebSocket |
+| `cloud/voice/speaker_tts.py` | 火山 TTS WebSocket + pygame 播放 |
+| `cloud/agent/assistant_manager.py` | 旧 AI 编排（ASR→LLM→TTS 循环） |
+| `cloud/agent/service_agent.py` | 旧 Agent 模式（LLM 输出 JSON 动作） |
+| `cloud/chat/doubao_chat.py` | 旧豆包对话接口（HTTP Responses API） |
+| `cloud/vision/doubao_vision.py` | 旧视觉分析（定时截图 → LLM） |
+| `communication/protocol.py` | TCP Unity 协议（已用 WebSocket 替代） |
+| `communication/tcp_server.py` | TCP 服务端（旧 Unity 原生客户端用） |
+| `test_rtc_voice.py` | 一次性测试脚本 |
 
-Three.js 3D 鸟瞰场景，与 CARLA 实时联动：
+以下**文档**也可以清理：
 
-| 功能 | 实现 |
+| 文件 | 说明 |
 |------|------|
-| 路面渲染 | 启动时一次性构建完整路网 mesh（世界坐标），每帧仅做平移+旋转变换 |
-| 车道线 | 相邻车道共享边为虚线分隔，外边界为实线 |
-| 周围车辆 | 15 个 NPC 池，按 CARLA actor ID 稳定分配，lerp 插值平滑 |
-| 车辆类型 | 根据 `number_of_wheels` 区分 car/bike/truck，不同渲染模型 |
-| 行人 | 10 个行人池，骨骼动画 + 横穿检测（红色高亮） |
-| Waypoint 路线 | 前方 120m 规划路径，青色半透明宽带实时渲染 |
-| 红绿灯 | 仅当 `is_at_traffic_light()` 时显示，billboard 朝向摄像头 |
-| 驾驶仪表 | 速度/档位/功率/油门/刹车/方向盘转角 |
+| `VOLC_REALTIME_VOICE_INTEGRATION.md` | 集成过程文档（已完成） |
+| `UNITY_INTEGRATION_TASKS.md` | Unity 集成任务（已完成） |
+| `COMMANDS.md` | 命令备忘（个人用） |
+| `handoff/` 整个目录 | 项目交接文档（看你要不要保留） |
 
-## HMI 界面设计
+## 保留的文件
 
-### 分层架构
+这些是当前系统正在使用的，**不要删**：
 
-| 层级 | 内容 |
-|------|------|
-| z-0 背景 | HMI.mp4 循环视频壁纸 |
-| z-50 | Unity WebGL 3D 场景（太空 + 跑车） |
-| z-100 | 主 UI（半透明面板浮在壁纸上） |
+- `main.py` — 仍引用旧模块做 `--legacy-voice` 降级，删旧文件后需同步清理
+- `config/settings.py` — 仍有 ASR/TTS 相关配置项，删后需清理
+- `edge/state/*` — 仍在使用
+- `edge/hmi_server/*` — 核心服务
+- `cloud/voice/rtc_service.py` — RTC 新方案核心
+- `hmi/static/*` — 全部保留
 
-### UI 布局
+## 删除后需要同步修改的代码
 
+1. **`main.py`**：删除 `--legacy-voice` 分支代码（第 84-99 行）
+2. **`config/settings.py`**：删除 `ASR_*`、`TTS_*`、`MIC_*`、`VISION_*` 相关配置
+3. **`cloud/__init__.py`** 及各子目录 `__init__.py`**：如果目录清空了就删掉
+
+## Git 命令
+
+```powershell
+# 1. 清理 pycache
+Get-ChildItem -Recurse -Directory -Filter "__pycache__" | Where-Object { $_.FullName -notlike "*\.venv\*" } | Remove-Item -Recurse -Force
+
+# 2. 删除旧文件
+git rm cloud/voice/microphone_asr.py
+git rm cloud/voice/speaker_tts.py
+git rm cloud/agent/assistant_manager.py
+git rm cloud/agent/service_agent.py
+git rm cloud/chat/doubao_chat.py
+git rm cloud/vision/doubao_vision.py
+git rm communication/protocol.py
+git rm communication/tcp_server.py
+git rm test_rtc_voice.py
+git rm VOLC_REALTIME_VOICE_INTEGRATION.md
+git rm UNITY_INTEGRATION_TASKS.md
+git rm -r handoff/
+
+# 3. 删除空的 __init__.py（如果目录只剩 __init__.py）
+git rm cloud/chat/__init__.py
+git rm cloud/vision/__init__.py
+git rm cloud/agent/__init__.py
+git rm communication/__init__.py  # 如果有的话
+
+# 4. 提交
+git add -A
+git commit -m "清理旧 TTS/ASR 本地语音方案，保留 RTC 端到端架构"
+
+# 5. 推送
+git -c http.proxy="" -c https.proxy="" push origin main
 ```
-┌───────────────────────────────────────────────────────────┐
-│ 顶部状态栏 — 连接状态 · AutoPilot · 时间                   │
-├────────┬──────────────────────────────┬───────────────────┤
-│ 左侧   │         中 央                │     右 侧         │
-│ ADAS   │    视频壁纸 / Unity 3D       │   动态卡片(4槽)   │
-│ Three.js│    导航地图                  │   音乐/视频/服务  │
-│ 仪表板  │                             │                   │
-├────────┴──────────────────────────────┴───────────────────┤
-│ 底部 Dock：导航 · ADAS · AI助手 · 服务 · 座舱 · 3D        │
-└───────────────────────────────────────────────────────────┘
-```
-
-## 快速开始
-
-### 1. 安装依赖
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. 配置密钥
-
-```bash
-cp .env.example .env
-# 编辑 .env 填入火山引擎 API Key
-```
-
-### 3. 启动
-
-```bash
-# 纯 HMI 测试（无需 CARLA）
-python main.py --hmi-only
-
-# Web HMI + AI（Mock 数据）
-python main.py --web-hmi --mock-carla
-
-# 完整模式（需要 CARLA 运行中）
-python main.py --web-hmi
-
-# CARLA + Web HMI（无 AI）
-python main.py --web-hmi --no-ai
-```
-
-### 4. 访问
-
-浏览器打开 `http://localhost:8080`，建议第二显示器全屏。
-
-## 双屏演示模式
-
-```
-显示器1: CARLA / pygame 仿真窗口
-显示器2: Chrome 全屏 http://localhost:8080（3840×590）
-```
-
-## 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| 仿真 | CARLA 0.9.15 + pygame |
-| 后端 | Python 3.12 + FastAPI + WebSocket |
-| 前端 | HTML/CSS/JS（3840×590 超宽适配） |
-| 3D | Unity WebGL（太空 + 跑车场景） |
-| ADAS | Three.js 实时鸟瞰可视化 |
-| 云端AI | 火山方舟 豆包大模型（对话+视觉） |
-| 语音 | 火山引擎 ASR/TTS WebSocket |
-| 字体 | Mercedes-Benz Corporate (MB Corpo) |
