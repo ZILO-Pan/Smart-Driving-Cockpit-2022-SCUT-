@@ -94,6 +94,14 @@
         dockService.classList.toggle('active', open);
     });
 
+    // AI Voice (NOVA)
+    dockAi.addEventListener('click', () => {
+        if (window.novaVoice) {
+            window.novaVoice.toggle();
+            dockAi.classList.toggle('active', window.novaVoice.isActive);
+        }
+    });
+
     // 3D Unity
     dock3d.addEventListener('click', () => {
         const isOpen = unityOverlay.classList.toggle('active');
@@ -1537,11 +1545,125 @@
                             else gearEl.textContent = 'D';
                         }
                     }
+                    // Forward FC messages to NOVA voice handler
+                    if ((msg.type === 'fc_pending' || msg.type === 'fc_executed') && window._novaHandleFCMessage) {
+                        window._novaHandleFCMessage(msg);
+                    }
+                    // Execute HMI actions from Function Calling
+                    if (msg.type === 'fc_executed' && msg.function) {
+                        _executeFCAction(msg.function, msg.params || {});
+                    }
                 } catch (e) {}
             };
         }
         connect();
     }
+
+    // ─── FC Action Executor ─────────────────────────────────
+    function _executeFCAction(funcName, params) {
+        console.log('[FC] Executing HMI action:', funcName, params);
+        switch (funcName) {
+            case 'open_service_card': {
+                const svc = params.service;
+                if (svc === 'music') { musicOpen = true; handleMusicBilibili(); }
+                else if (svc === 'video' || svc === 'bilibili') { bilibiliOpen = true; handleMusicBilibili(); }
+                else if (serviceTemplates[svc]) { addCard(svc, 1, serviceTemplates[svc], ''); }
+                break;
+            }
+            case 'play_music': {
+                if (!isPlaying && audio) { audio.play(); isPlaying = true; }
+                break;
+            }
+            case 'set_cabin_mode': {
+                // Broadcast mode change via ws for state sync
+                break;
+            }
+            case 'show_alert': {
+                const msg = params.message || '';
+                if (msg) { setReply && window._novaHandleFCMessage({ type: 'fc_executed', function: 'show_alert', result: msg }); }
+                break;
+            }
+            case 'set_ambient_light': {
+                document.documentElement.style.setProperty('--accent-cyan', _colorMap(params.color));
+                break;
+            }
+            // ─── Dock 面板控制 ───
+            case 'toggle_adas': {
+                const show = params.show;
+                const hidden = zoneLeft.classList.contains('hidden');
+                if (show && hidden) { zoneLeft.classList.remove('hidden'); dockAdas.classList.add('active'); }
+                else if (!show && !hidden) { zoneLeft.classList.add('hidden'); dockAdas.classList.remove('active'); }
+                break;
+            }
+            case 'toggle_navigation': {
+                const show = params.show;
+                const hidden = zoneCenter.classList.contains('hidden');
+                if (show && hidden) { zoneCenter.classList.remove('hidden'); dockNav.classList.add('active'); }
+                else if (!show && !hidden) { zoneCenter.classList.add('hidden'); dockNav.classList.remove('active'); }
+                break;
+            }
+            case 'toggle_cabin_cards': {
+                const show = params.show;
+                const hidden = zoneRight.classList.contains('hidden');
+                if (show && hidden) { zoneRight.classList.remove('hidden'); dockCabin.classList.add('active'); }
+                else if (!show && !hidden) { zoneRight.classList.add('hidden'); dockCabin.classList.remove('active'); }
+                break;
+            }
+            case 'toggle_service_panel': {
+                const open = params.open;
+                if (open) { servicePanel.classList.add('open'); dockService.classList.add('active'); }
+                else { servicePanel.classList.remove('open'); dockService.classList.remove('active'); }
+                break;
+            }
+            case 'toggle_3d_scene': {
+                const show = params.show;
+                const isOpen = unityOverlay.classList.contains('active');
+                if (show && !isOpen) {
+                    unityOverlay.classList.add('active'); dock3d.classList.add('active');
+                    if (!unityLoaded) { loadUnity(); unityLoaded = true; }
+                } else if (!show && isOpen) {
+                    unityOverlay.classList.remove('active'); dock3d.classList.remove('active');
+                }
+                break;
+            }
+            // ─── Unity 3D 场景控制 ───
+            case 'switch_camera': {
+                if (window.HMI) window.HMI.switchCamera(params.view);
+                break;
+            }
+            case 'reset_camera': {
+                if (window.HMI) window.HMI.sendCommand('resetCamera');
+                break;
+            }
+            case 'toggle_car_part': {
+                if (window.HMI) window.HMI.togglePart(params.part);
+                break;
+            }
+            case 'open_car_part': {
+                if (window.HMI) window.HMI.openPart(params.part);
+                break;
+            }
+            case 'close_car_part': {
+                if (window.HMI) window.HMI.closePart(params.part);
+                break;
+            }
+            case 'rotate_car': {
+                if (!window.HMI) break;
+                if (params.mode === 'absolute') window.HMI.rotateCarTo(params.angle || 0);
+                else if (params.mode === 'relative') window.HMI.rotateCarBy(params.angle || 90);
+                else window.HMI.resetCarRotation();
+                break;
+            }
+        }
+    }
+
+    function _colorMap(color) {
+        const map = { '蓝': '#00d4ff', '红': '#ff3b30', '绿': '#34c759', '紫': '#7b2dff', '暖白': '#ffd4a0', '橙': '#ff9500' };
+        return map[color] || '#00d4ff';
+    }
+
+    // 暴露给 voice.js 调用
+    window._executeFCAction = _executeFCAction;
 
     // ─── Init ────────────────────────────────────────────────
     function init() {

@@ -217,6 +217,20 @@
             <div class="bili-select-grid" id="bili-select-grid"></div>
         </div>
 
+        <!-- NOVA 语音对话浮动面板 -->
+        <div class="nova-overlay" id="nova-overlay" style="display:none;">
+            <div class="nova-orb" id="nova-orb">
+                <div class="nova-pulse-ring"></div>
+                <div class="nova-pulse-ring nova-pulse-ring-2"></div>
+                <div class="nova-icon">N</div>
+            </div>
+            <div class="nova-content">
+                <div class="nova-transcript" id="nova-transcript"></div>
+                <div class="nova-reply" id="nova-reply"></div>
+            </div>
+            <div class="nova-state" id="nova-state">Ready</div>
+        </div>
+
         <!-- 待机锁屏 -->
         <div class="lockscreen" id="lockscreen">
             <img class="lockscreen-bg" src="/static/wallpaper/9e84f9358b77a634fb1d2751f8a8731.png" alt="">
@@ -231,6 +245,8 @@
 
     <script src="/static/unity/ai-car-scene/Build/AI4HMI.loader.js" onerror="console.warn('Unity loader not found, 3D scene unavailable')"></script>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="/static/app.js?v=29"></script>
+    <script src="/static/volc-rtc.min.js"></script>
+    <script src="/static/app.js?v=31"></script>
+    <script src="/static/voice.js?v=3"></script>
 </body>
 </html>

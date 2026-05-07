@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python \"e:/归档作业/smart_cockpit/extract_text.py\")",
+      "Bash(python3 -c \"print\\('hello'\\)\")",
+      "Bash(curl -s -L \"https://www.volcengine.com/docs/6348/1350595\")",
+      "Bash(iconv -f utf-8 -t utf-8 -c)",
+      "Read(//e//**)",
+      "Bash(python3)",
+      "Bash(python -c \"print\\('hello world'\\)\")",
+      "Bash(python3 -V)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Pzl\\AppData\\Local\\Temp"
+    ]
+  }
+}

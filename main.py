@@ -79,24 +79,32 @@ class SmartCockpitApp:
             else:
                 set_road_map(self._build_mock_road_map())
 
-        # 4. AI 助手 + 服务 Agent（云端）
+        # 4. AI 助手（云端）
         if use_ai:
-            from cloud.agent.assistant_manager import AssistantManager
-            from cloud.agent.service_agent import ServiceAgent
+            use_legacy_voice = "--legacy-voice" in self.args
 
-            self.ai_assistant = AssistantManager(self.state_manager)
-            self.service_agent = ServiceAgent(
-                self.cabin_state, self.state_manager, self.service_executor
-            )
-
-            frame_getter = self.carla_bridge.get_latest_frame if self.carla_bridge else None
-            self.ai_assistant.start(frame_getter=frame_getter)
-
-            if use_web_hmi:
-                from edge.hmi_server.server import push_ai_message_sync
-                self.ai_assistant.on_reply(push_ai_message_sync)
+            if settings.RTC_VOICE_ENABLED and not use_legacy_voice:
+                # 新方案：NOVA RTC 端到端语音（前端 SDK 处理录音/播放）
+                # 后端只需提供 API 端点，不启动本地 ASR/TTS
+                print("[MAIN] 使用 NOVA RTC 语音（浏览器端）")
+            else:
+                # 旧方案：本地 PyAudio + pygame（需要 --legacy-voice 显式启用）
+                from cloud.agent.assistant_manager import AssistantManager
+                self.ai_assistant = AssistantManager(self.state_manager)
+                frame_getter = self.carla_bridge.get_latest_frame if self.carla_bridge else None
+                self.ai_assistant.start(frame_getter=frame_getter)
+                if use_web_hmi:
+                    from edge.hmi_server.server import push_ai_message_sync
+                    self.ai_assistant.on_reply(push_ai_message_sync)
+                print("[MAIN] 使用 Legacy 语音（本地 PyAudio + pygame）")
         else:
             print("[MAIN] 跳过 AI 模块")
+
+        # 5. RTC 语音状态
+        if settings.RTC_VOICE_ENABLED:
+            print(f"[MAIN] NOVA RTC 语音已就绪 (AppId={settings.RTC_APP_ID[:8]}...)")
+        else:
+            print("[MAIN] NOVA RTC 语音未配置（缺少 VOLC_ACCESS_KEY_ID/RTC_APP_ID/S2S_APP_ID）")
 
         # 启动信息
         print(f"\n[MAIN] 所有模块已启动!")

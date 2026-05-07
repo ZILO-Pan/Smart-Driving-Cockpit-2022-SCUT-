@@ -1176,3 +1176,135 @@ html, body {
     border-radius: 2px;
     transition: width 0.2s;
 }
+
+/* ═══════════════════ NOVA Voice Overlay ═══════════════════ */
+.nova-overlay {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 24px 12px 16px;
+    background: rgba(10, 12, 20, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 40px;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+.nova-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Orb */
+.nova-orb {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.nova-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00d4ff 0%, #7b2dff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'MB Corpo Title', 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    z-index: 2;
+}
+
+/* Pulse rings */
+.nova-pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 212, 255, 0.4);
+    transform: translate(-50%, -50%);
+    opacity: 0;
+}
+.nova-listening .nova-pulse-ring {
+    animation: nova-pulse 1.8s ease-out infinite;
+}
+.nova-listening .nova-pulse-ring-2 {
+    animation: nova-pulse 1.8s ease-out infinite 0.6s;
+}
+.nova-speaking .nova-pulse-ring {
+    border-color: rgba(123, 45, 255, 0.5);
+    animation: nova-pulse 1.2s ease-out infinite;
+}
+.nova-speaking .nova-pulse-ring-2 {
+    border-color: rgba(123, 45, 255, 0.3);
+    animation: nova-pulse 1.2s ease-out infinite 0.4s;
+}
+.nova-thinking .nova-pulse-ring {
+    border-color: rgba(255, 180, 0, 0.4);
+    animation: nova-rotate 2s linear infinite;
+}
+.nova-connecting .nova-pulse-ring {
+    border-color: rgba(100, 100, 100, 0.4);
+    animation: nova-pulse 2.5s ease-out infinite;
+}
+
+@keyframes nova-pulse {
+    0% { width: 40px; height: 40px; opacity: 0.6; }
+    100% { width: 70px; height: 70px; opacity: 0; }
+}
+@keyframes nova-rotate {
+    0% { transform: translate(-50%, -50%) rotate(0deg); border-radius: 50%; }
+    50% { border-radius: 40%; }
+    100% { transform: translate(-50%, -50%) rotate(360deg); border-radius: 50%; }
+}
+
+/* Content */
+.nova-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 400px;
+    min-width: 120px;
+}
+.nova-transcript {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 16px;
+}
+.nova-reply {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.3;
+    max-height: 40px;
+    overflow: hidden;
+}
+
+/* State label */
+.nova-state {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    white-space: nowrap;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+.nova-state.state-listening { color: rgba(0, 212, 255, 0.8); }
+.nova-state.state-speaking { color: rgba(123, 45, 255, 0.8); }
+.nova-state.state-thinking { color: rgba(255, 180, 0, 0.8); }
+.nova-state.state-error { color: rgba(255, 80, 80, 0.8); }
+.nova-state.state-connecting { color: rgba(150, 150, 150, 0.8); }

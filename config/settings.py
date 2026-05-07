@@ -65,7 +65,35 @@ TTS_WS_URL = os.getenv("TTS_WS_URL", "wss://openspeech.bytedance.com/api/v1/tts/
 TTS_ENCODING = "mp3"
 TTS_SAMPLE_RATE = 24000
 
-# ============ 麦克风录音 ============
+# ============ 火山 RTC + 端到端语音 ============
+VOLC_ACCESS_KEY_ID = os.getenv("VOLC_ACCESS_KEY_ID", "")
+VOLC_SECRET_ACCESS_KEY = os.getenv("VOLC_SECRET_ACCESS_KEY", "")
+RTC_APP_ID = os.getenv("RTC_APP_ID", "")
+RTC_APP_KEY = os.getenv("RTC_APP_KEY", "")
+S2S_APP_ID = os.getenv("S2S_APP_ID", "")
+S2S_ACCESS_TOKEN = os.getenv("S2S_ACCESS_TOKEN", "")
+RTC_FC_SIGNATURE = os.getenv("RTC_FC_SIGNATURE", "nova_fc_secret")
+VOICE_CALLBACK_URL = os.getenv("VOICE_CALLBACK_URL", "")
+VOICE_VISION_ENABLED = os.getenv("VOICE_VISION_ENABLED", "false").lower() == "true"
+VOICE_VISION_INTERVAL = int(os.getenv("VOICE_VISION_INTERVAL", "5"))
+RTC_VOICE_ENABLED = bool(VOLC_ACCESS_KEY_ID and RTC_APP_ID and S2S_APP_ID)
+
+NOVA_SYSTEM_PROMPT = os.getenv("NOVA_SYSTEM_PROMPT",
+    "你是智能驾驶座舱AI助手NOVA，运行在L4级自动驾驶汽车中。"
+    "你善于理解用户的模糊需求，回复简洁自然（不超过50字），适合语音播报。"
+    "当用户需要控制座舱或驾驶时，调用对应工具函数。"
+    "\n【HMI面板控制】你可以toggle_adas/toggle_navigation/toggle_cabin_cards显示隐藏各面板，toggle_service_panel打开服务应用面板，toggle_3d_scene打开3D展车。"
+    "\n【3D展车规则】操作车辆部件前必须：1.先toggle_3d_scene(show=true)打开3D场景；2.switch_camera(view='carExterior')切到车外视角；3.再用open_car_part/close_car_part/toggle_car_part操作部件。"
+    "用户说'看看车内'→toggle_3d_scene+switch_camera('carInterior')。用户说'打开车门'→toggle_3d_scene+switch_camera('carExterior')+open_car_part('doorL')。"
+    "rotate_car可旋转车辆展示不同角度。reset_camera复位视角。"
+)
+
+# ============ 唤醒词检测 ============
+VOICE_WAKE_WORD = os.getenv("VOICE_WAKE_WORD", "NOVA")
+WAKE_VAD_THRESHOLD = int(os.getenv("WAKE_VAD_THRESHOLD", "200"))
+WAKE_SILENCE_MS = int(os.getenv("WAKE_SILENCE_MS", "2000"))
+
+# ============ 麦克风录音（Legacy fallback） ============
 MIC_SAMPLE_RATE = 16000
 MIC_CHANNELS = 1
 MIC_CHUNK_MS = 200

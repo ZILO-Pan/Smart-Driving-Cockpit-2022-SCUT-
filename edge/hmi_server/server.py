@@ -15,8 +15,11 @@ from fastapi.responses import FileResponse, Response
 
 from config import settings
 from edge.state.vehicle_state import VehicleStateManager
+from edge.hmi_server.voice_api import router as voice_router, set_voice_dependencies
+from edge.hmi_server.wake_ws import wake_websocket_handler
 
 app = FastAPI(title="Smart Cockpit HMI")
+app.include_router(voice_router)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "hmi" / "static"
 
@@ -66,6 +69,8 @@ def set_dependencies(state_manager, cabin_state=None, service_executor=None, ai_
     _cabin_state = cabin_state
     _service_executor = service_executor
     _ai_assistant = ai_assistant
+    # Wire voice API dependencies
+    set_voice_dependencies(service_executor, cabin_state, state_manager, _connected_clients)
 
 
 def set_road_map(road_map: list):
@@ -76,6 +81,11 @@ def set_road_map(road_map: list):
 @app.get("/")
 async def index():
     return FileResponse(str(STATIC_DIR / "index.html"))
+
+
+@app.websocket("/ws/wake")
+async def wake_endpoint(ws: WebSocket):
+    await wake_websocket_handler(ws)
 
 
 @app.websocket("/ws")
