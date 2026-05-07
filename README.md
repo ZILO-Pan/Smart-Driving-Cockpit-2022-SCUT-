@@ -129,36 +129,4 @@ smart_cockpit/
 2. **`config/settings.py`**：删除 `ASR_*`、`TTS_*`、`MIC_*`、`VISION_*` 相关配置
 3. **`cloud/__init__.py`** 及各子目录 `__init__.py`**：如果目录清空了就删掉
 
-## Git 命令
 
-```powershell
-# 1. 清理 pycache
-Get-ChildItem -Recurse -Directory -Filter "__pycache__" | Where-Object { $_.FullName -notlike "*\.venv\*" } | Remove-Item -Recurse -Force
-
-# 2. 删除旧文件
-git rm cloud/voice/microphone_asr.py
-git rm cloud/voice/speaker_tts.py
-git rm cloud/agent/assistant_manager.py
-git rm cloud/agent/service_agent.py
-git rm cloud/chat/doubao_chat.py
-git rm cloud/vision/doubao_vision.py
-git rm communication/protocol.py
-git rm communication/tcp_server.py
-git rm test_rtc_voice.py
-git rm VOLC_REALTIME_VOICE_INTEGRATION.md
-git rm UNITY_INTEGRATION_TASKS.md
-git rm -r handoff/
-
-# 3. 删除空的 __init__.py（如果目录只剩 __init__.py）
-git rm cloud/chat/__init__.py
-git rm cloud/vision/__init__.py
-git rm cloud/agent/__init__.py
-git rm communication/__init__.py  # 如果有的话
-
-# 4. 提交
-git add -A
-git commit -m "清理旧 TTS/ASR 本地语音方案，保留 RTC 端到端架构"
-
-# 5. 推送
-git -c http.proxy="" -c https.proxy="" push origin main
-```
