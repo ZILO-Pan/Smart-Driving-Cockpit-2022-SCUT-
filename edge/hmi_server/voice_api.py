@@ -179,15 +179,41 @@ async def function_calling_callback(request: Request):
     return {"status": "unknown_type"}
 
 
+# 分组工具 → 真实 action 的分发表
+_GROUPED_TOOL_DISPATCH = {
+    "cabin_control": {"set_ac_temperature", "set_seat_ventilation", "toggle_window",
+                      "set_ambient_light", "set_cabin_mode"},
+    "media_nav_control": {"play_music", "set_destination", "change_lane"},
+    "panel_control": {"toggle_adas", "toggle_navigation", "toggle_cabin_cards",
+                      "toggle_service_panel", "toggle_3d_scene",
+                      "open_service_card", "show_alert"},
+    "unity_control": {"switch_camera", "reset_camera", "toggle_car_part",
+                      "open_car_part", "close_car_part", "rotate_car"},
+}
+
+
 def _execute_function(func_name: str, params: dict) -> str:
-    """执行 Function Calling 工具"""
+    """执行 Function Calling 工具（支持分组工具分发）"""
     if not _service_executor:
         return "服务执行器未就绪"
+
+    # 分组工具分发
+    if func_name in _GROUPED_TOOL_DISPATCH:
+        real_action = params.get("action", "")
+        real_params = params.get("params", {})
+        if real_action not in _GROUPED_TOOL_DISPATCH[func_name]:
+            return f"无效的{func_name}动作: {real_action}"
+        print(f"[FC] Dispatch: {func_name}.{real_action}({real_params})")
+        return _execute_function(real_action, real_params)
+
+    # query_state 单独处理（查询型，不是执行型）
+    if func_name == "query_state":
+        target = params.get("target", "")
+        return _query_state(target)
 
     try:
         _service_executor.execute(func_name, params)
 
-        # 生成人类可读的结果描述
         descriptions = {
             "set_ac_temperature": f"已将空调设置为{params.get('temperature', '?')}°C",
             "set_seat_ventilation": f"座椅通风已{'开启' if params.get('on') else '关闭'}",
@@ -199,13 +225,11 @@ def _execute_function(func_name: str, params: dict) -> str:
             "change_lane": f"正在向{params.get('direction', '?')}变道",
             "open_service_card": f"已打开{params.get('service', '?')}服务",
             "show_alert": f"提示: {params.get('message', '')}",
-            # Dock 面板
             "toggle_adas": f"ADAS面板已{'显示' if params.get('show') else '隐藏'}",
             "toggle_navigation": f"导航面板已{'显示' if params.get('show') else '隐藏'}",
             "toggle_cabin_cards": f"座舱卡片已{'显示' if params.get('show') else '隐藏'}",
             "toggle_service_panel": f"服务面板已{'打开' if params.get('open') else '关闭'}",
             "toggle_3d_scene": f"3D展车场景已{'打开' if params.get('show') else '关闭'}",
-            # Unity 3D
             "switch_camera": f"已切换到{params.get('view', '默认')}视角",
             "reset_camera": "已重置到默认视角",
             "toggle_car_part": f"已切换{params.get('part', '')}状态",
@@ -217,6 +241,24 @@ def _execute_function(func_name: str, params: dict) -> str:
     except Exception as e:
         print(f"[FC] Execute error: {e}")
         return f"执行失败: {e}"
+
+
+def _query_state(target: str) -> str:
+    """查询型工具，返回当前状态文本（让 AI 用语音播报）"""
+    if target == "cabin" and _cabin_state:
+        d = _cabin_state.get_dict()
+        return (f"空调{d.get('ac_temperature', '?')}度，"
+                f"氛围灯{d.get('ambient_light', '?')}色，"
+                f"模式{d.get('cabin_mode', '?')}")
+    elif target == "vehicle" and _vehicle_state:
+        d = _vehicle_state.get_dict()
+        return (f"当前车速{round(d.get('speed_kmh', 0))}公里每小时，"
+                f"挡位{d.get('gear', '?')}，"
+                f"自动驾驶{'开' if d.get('autopilot_enabled') else '关'}")
+    elif target == "navigation" and _vehicle_state:
+        d = _vehicle_state.get_dict()
+        return f"目前在第{d.get('ego_lane_index', 0) + 1}车道，共{d.get('lane_count', 0)}车道"
+    return "暂无可用状态"
 
 
 class FCExecuteRequest(BaseModel):

@@ -434,12 +434,30 @@
     }
 
     // ─── Function Calling 客户端执行 ────────────────────────
+    const GROUPED_TOOLS = {
+        cabin_control: true,
+        media_nav_control: true,
+        panel_control: true,
+        unity_control: true,
+    };
+
     function _handleFunctionCall(funcName, args, callId) {
-        // 通过 app.js 暴露的 _executeFCAction 执行
-        if (window._executeFCAction) {
-            window._executeFCAction(funcName, args);
+        let realAction = funcName;
+        let realParams = args;
+
+        // 分组工具拆解：提取真实 action 和 params
+        if (GROUPED_TOOLS[funcName] && args.action) {
+            realAction = args.action;
+            realParams = args.params || {};
+            console.log('[NOVA-FC] Unpack grouped:', funcName, '→', realAction, realParams);
         }
-        // 同时通知后端执行（状态同步 + 可选的 UpdateVoiceChat）
+
+        // query_state 不需要前端执行（纯查询，后端返回结果给 AI 播报）
+        if (realAction !== 'query_state' && window._executeFCAction) {
+            window._executeFCAction(realAction, realParams);
+        }
+
+        // 通知后端执行（传原始分组工具名，让后端自己分发）
         fetch('/api/voice/fc-execute', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -450,9 +468,9 @@
                 call_id: callId,
             }),
         }).then(r => r.json()).then(data => {
-            setReply(data.result || ('已执行: ' + funcName));
+            setReply(data.result || ('已执行: ' + realAction));
         }).catch(() => {
-            setReply('已执行: ' + funcName);
+            setReply('已执行: ' + realAction);
         });
     }
 

@@ -180,7 +180,7 @@ def start_voice_chat(room_id: str, bot_user_id: str, target_user_id: str,
     config = {
         "S2SConfig": {
             "Provider": "volcano",
-            "OutputMode": 0,
+            "OutputMode": 1,
             "ProviderParams": {
                 "app": {
                     "appid": settings.S2S_APP_ID,
@@ -195,32 +195,20 @@ def start_voice_chat(room_id: str, bot_user_id: str, target_user_id: str,
                 }
             }
         },
+        "LLMConfig": {
+            "Mode": "ArkV3",
+            "EndPointId": settings.ARK_ENDPOINT_ID,
+            "SystemMessages": [settings.NOVA_SYSTEM_PROMPT],
+            "MaxTokens": 128,
+            "Temperature": 0.1,
+            "Tools": _get_tools_definition(),
+        },
         "SubtitleConfig": {
             "SubtitleMode": 1,
         },
-        "InterruptMode": 1,
+        "InterruptMode": 0,
     }
 
-    # 视觉理解（用户摄像头 → AI 可感知画面）
-    if settings.VOICE_VISION_ENABLED:
-        config["VisionConfig"] = {
-            "Enable": True,
-            "SnapshotInterval": settings.VOICE_VISION_INTERVAL,
-        }
-
-    # Function Calling: 始终启用 LLM + Tools（混合模式）
-    config["S2SConfig"]["OutputMode"] = 1
-    config["LLMConfig"] = {
-        "Mode": "ArkV3",
-        "EndPointId": settings.ARK_ENDPOINT_ID,
-        "SystemMessages": [settings.NOVA_SYSTEM_PROMPT],
-        "MaxTokens": 1024,
-        "Temperature": 0.3,
-        "Tools": _get_tools_definition(),
-    }
-
-    # 如果有公网回调 URL → 服务端模式（火山 POST 到你的后端）
-    # 如果没有 → 客户端模式（FC 通过 RTC binary message 推到浏览器）
     if fc_callback_url:
         config["FunctionCallingConfig"] = {
             "ServerMessageUrl": fc_callback_url,
@@ -244,11 +232,16 @@ def start_voice_chat(room_id: str, bot_user_id: str, target_user_id: str,
     url = "https://rtc.volcengineapi.com?Action=StartVoiceChat&Version=2024-12-01"
     headers = _sign_request("POST", url, body)
 
+    print(f"[RTC] StartVoiceChat request body:")
+    print(json.dumps(json.loads(body), indent=2, ensure_ascii=False))
+
     try:
         resp = requests.post(url, headers=headers, data=body, timeout=15)
         result = resp.json()
         result["_task_id"] = task_id
-        if resp.status_code == 200:
+        print(f"[RTC] StartVoiceChat response ({resp.status_code}):")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if resp.status_code == 200 and result.get("Result") == "ok":
             print(f"[RTC] VoiceChat started: room={room_id}, bot={bot_user_id}, task={task_id}")
         else:
             error = result.get("ResponseMetadata", {}).get("Error", {})
@@ -310,300 +303,95 @@ def stop_voice_chat(room_id: str, task_id: str) -> dict:
 
 
 def _get_tools_definition() -> list:
-    """Function Calling 工具定义（座舱控制）"""
+    """5 grouped tools, minimal JSON to stay under S2S prompt limit."""
     return [
         {
             "type": "function",
             "function": {
-                "name": "set_ac_temperature",
-                "description": "设置车内空调温度",
+                "name": "cabin_control",
+                "description": "cabin device control",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "temperature": {"type": "number", "description": "目标温度(摄氏度)，范围16-30"}
+                        "action": {
+                            "type": "string",
+                            "enum": ["set_ac_temperature", "set_seat_ventilation", "toggle_window", "set_ambient_light", "set_cabin_mode"]
+                        },
+                        "params": {"type": "object"}
                     },
-                    "required": ["temperature"]
+                    "required": ["action", "params"]
                 }
             }
         },
         {
             "type": "function",
             "function": {
-                "name": "set_seat_ventilation",
-                "description": "开关座椅通风",
+                "name": "media_nav_control",
+                "description": "media and navigation",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "on": {"type": "boolean", "description": "true开启/false关闭"}
+                        "action": {
+                            "type": "string",
+                            "enum": ["play_music", "set_destination", "change_lane"]
+                        },
+                        "params": {"type": "object"}
                     },
-                    "required": ["on"]
+                    "required": ["action", "params"]
                 }
             }
         },
         {
             "type": "function",
             "function": {
-                "name": "toggle_window",
-                "description": "开关车窗",
+                "name": "panel_control",
+                "description": "show/hide HMI panels",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "open": {"type": "boolean", "description": "true开窗/false关窗"}
+                        "action": {
+                            "type": "string",
+                            "enum": ["toggle_adas", "toggle_navigation", "toggle_cabin_cards", "toggle_service_panel", "toggle_3d_scene", "open_service_card", "show_alert"]
+                        },
+                        "params": {"type": "object"}
                     },
-                    "required": ["open"]
+                    "required": ["action", "params"]
                 }
             }
         },
         {
             "type": "function",
             "function": {
-                "name": "set_ambient_light",
-                "description": "设置氛围灯颜色",
+                "name": "unity_control",
+                "description": "3D scene control",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "color": {"type": "string", "description": "颜色名称(蓝/红/绿/紫/暖白)"}
+                        "action": {
+                            "type": "string",
+                            "enum": ["switch_camera", "reset_camera", "toggle_car_part", "open_car_part", "close_car_part", "rotate_car"]
+                        },
+                        "params": {"type": "object"}
                     },
-                    "required": ["color"]
+                    "required": ["action", "params"]
                 }
             }
         },
         {
             "type": "function",
             "function": {
-                "name": "play_music",
-                "description": "播放音乐",
+                "name": "query_state",
+                "description": "query current state",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "title": {"type": "string", "description": "歌曲名或类型"}
+                        "target": {
+                            "type": "string",
+                            "enum": ["cabin", "vehicle", "navigation"]
+                        }
                     },
-                    "required": ["title"]
+                    "required": ["target"]
                 }
             }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "set_cabin_mode",
-                "description": "切换座舱模式",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "mode": {"type": "string", "enum": ["标准", "休息", "运动", "影院"], "description": "模式名称"}
-                    },
-                    "required": ["mode"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "set_destination",
-                "description": "设置导航目的地",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "destination": {"type": "string", "description": "目的地名称"}
-                    },
-                    "required": ["destination"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "change_lane",
-                "description": "变道",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "direction": {"type": "string", "enum": ["左", "右"], "description": "变道方向"}
-                    },
-                    "required": ["direction"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "open_service_card",
-                "description": "打开服务卡片。alipay=支付宝, ctrip=携程旅行, music=音乐, bilibili=B站视频, parking=智慧停车, charging=充电站, news=新闻",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "service": {"type": "string", "enum": ["alipay", "ctrip", "music", "bilibili", "parking", "charging", "news"], "description": "服务类型"}
-                    },
-                    "required": ["service"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "show_alert",
-                "description": "在HMI上显示提示信息",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "message": {"type": "string", "description": "提示内容"}
-                    },
-                    "required": ["message"]
-                }
-            }
-        },
-        # ─── Dock 面板控制 ───
-        {
-            "type": "function",
-            "function": {
-                "name": "toggle_adas",
-                "description": "显示或隐藏ADAS驾驶辅助面板",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "show": {"type": "boolean", "description": "true显示/false隐藏"}
-                    },
-                    "required": ["show"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "toggle_navigation",
-                "description": "显示或隐藏导航地图面板",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "show": {"type": "boolean", "description": "true显示/false隐藏"}
-                    },
-                    "required": ["show"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "toggle_cabin_cards",
-                "description": "显示或隐藏座舱娱乐卡片区域(音乐/视频等)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "show": {"type": "boolean", "description": "true显示/false隐藏"}
-                    },
-                    "required": ["show"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "toggle_service_panel",
-                "description": "打开或关闭服务应用面板(支付宝/携程/充电/停车等)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "open": {"type": "boolean", "description": "true打开/false关闭"}
-                    },
-                    "required": ["open"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "toggle_3d_scene",
-                "description": "打开或关闭3D展车场景(Unity)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "show": {"type": "boolean", "description": "true打开/false关闭"}
-                    },
-                    "required": ["show"]
-                }
-            }
-        },
-        # ─── Unity 3D 场景控制 ───
-        {
-            "type": "function",
-            "function": {
-                "name": "switch_camera",
-                "description": "切换3D场景视角(需先打开3D场景)。default=默认全景, astronaut=宇航员近景, carExterior=车外, carInterior=车内",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "view": {"type": "string", "enum": ["default", "astronaut", "carExterior", "carInterior"], "description": "目标视角"}
-                    },
-                    "required": ["view"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "reset_camera",
-                "description": "重置3D场景到默认视角",
-                "parameters": {
-                    "type": "object",
-                    "properties": {}
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "toggle_car_part",
-                "description": "切换车辆部件开关状态(需在carExterior视角)。doorL=左车门, doorR=右车门, hood=引擎盖, trunk=后备箱, windowL=左车窗, windowR=右车窗",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "part": {"type": "string", "enum": ["doorL", "doorR", "hood", "trunk", "windowL", "windowR"], "description": "部件ID"}
-                    },
-                    "required": ["part"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "open_car_part",
-                "description": "打开车辆指定部件(需在carExterior视角)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "part": {"type": "string", "enum": ["doorL", "doorR", "hood", "trunk", "windowL", "windowR"], "description": "部件ID"}
-                    },
-                    "required": ["part"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "close_car_part",
-                "description": "关闭车辆指定部件(需在carExterior视角)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "part": {"type": "string", "enum": ["doorL", "doorR", "hood", "trunk", "windowL", "windowR"], "description": "部件ID"}
-                    },
-                    "required": ["part"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "rotate_car",
-                "description": "旋转3D车辆查看不同角度。absolute=转到指定角度, relative=相对当前转, reset=复位",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "mode": {"type": "string", "enum": ["absolute", "relative", "reset"], "description": "旋转模式"},
-                        "angle": {"type": "number", "description": "角度(-180到180)，reset模式下可不传"}
-                    },
-                    "required": ["mode"]
-                }
-            }
-        },
+        }
     ]

@@ -31,3 +31,6 @@ hmi/static/unity/
 
 # HMI videos (large media files)
 hmi/static/videos/*.mp4
+
+# Large PDF docs (reference only)
+*.pdf
