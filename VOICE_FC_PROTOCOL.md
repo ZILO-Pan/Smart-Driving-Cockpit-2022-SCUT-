@@ -273,6 +273,127 @@ case 'play_video': {
 
 ## 八、3D 展车控制
 
+### ⚠️ 高优先级 BUG：Unity 命令不执行
+
+**现象**：用户说"打开左车门"，语音正确识别了 `open_car_part({part:'doorL'})`，但 3D 画面没有动。
+
+**根因**：`app.js` 第 1757-1764 行的异步竞态问题：
+
+```js
+case 'open_car_part': {
+    const isOpen = unityOverlay.classList.contains('active');
+    if (!isOpen) {
+        unityOverlay.classList.add('active');
+        if (!unityLoaded) { loadUnity(); unityLoaded = true; }  // ← 异步加载！
+    }
+    if (!window.HMI) break;  // ← Unity 还没加载完，window.HMI 为 null，直接 break 丢弃命令！
+    window.HMI.openPart(params.part);  // ← 永远执行不到
+}
+```
+
+`loadUnity()` 调用 `createUnityInstance()` 返回 Promise，只有 `.then()` 回调中才执行 `setupHMIBridge(instance)` 设置 `window.HMI`。加载 Unity WebGL 需要几秒，期间所有命令全部丢失。
+
+**修复方案**：需要一个命令队列，Unity 加载完成前的命令先缓存，加载完成后重放：
+
+```js
+// 在 IIFE 顶层
+let _pendingHMICommands = [];
+
+// 在 unity_control case 中
+case 'open_car_part': {
+    const isOpen = unityOverlay.classList.contains('active');
+    if (!isOpen) {
+        unityOverlay.classList.add('active'); dock3d.classList.add('active');
+        if (!unityLoaded) { loadUnity(); unityLoaded = true; }
+    }
+    if (!window.HMI) {
+        // Unity 还在加载，缓存命令
+        _pendingHMICommands.push({ funcName, params });
+        break;
+    }
+    // 正常执行...
+}
+
+// 在 setupHMIBridge 的末尾（Unity 加载完成时）
+function setupHMIBridge(instance) {
+    window.HMI = { ... };
+    // 重放缓存的命令
+    while (_pendingHMICommands.length > 0) {
+        const cmd = _pendingHMICommands.shift();
+        _executeFCAction(cmd.funcName, cmd.params);
+    }
+}
+```
+
+**另一种情况**：如果用户之前已经手动打开过 3D 场景（Unity 已加载），再通过语音调用就没问题。BUG 只发生在 **首次通过语音触发 3D 场景** 的时候。
+
+---
+
+### Unity ↔ HMI 通信协议
+
+#### JS → Unity（发送命令）
+
+通过 `instance.SendMessage('HMIController', 'ExecuteCommand', jsonString)` 发送。
+
+JSON 格式：
+```json
+{
+  "action": "openPart",
+  "target": "doorL",
+  "paramsJson": ""
+}
+```
+
+| action | target | paramsJson | 说明 |
+|--------|--------|-----------|------|
+| `switchCamera` | `default`/`astronaut`/`interior`/`front`/`rear`/`top` | "" | 切换摄像机 |
+| `resetCamera` | "" | "" | 重置摄像机 |
+| `togglePart` | `doorL`/`doorR`/`hood`/`trunk`/`windowL`/`windowR` | "" | 切换部件状态 |
+| `openPart` | 同上 | "" | 打开部件 |
+| `closePart` | 同上 | "" | 关闭部件 |
+| `rotateCar` | `absolute`/`relative`/`reset` | `{"angle":90}` | 旋转车辆 |
+| `getState` | `all` | "" | 请求当前状态 |
+
+Unity 接收端对象名：`HMIController`，方法名：`ExecuteCommand`，参数类型：`string`（JSON）
+
+#### Unity → JS（事件回调）
+
+Unity 通过调用全局函数 `window.OnUnityEvent(jsonString)` 发送事件：
+
+```json
+{
+  "eventType": "cameraTransitionEnd",
+  "target": "interior"
+}
+```
+
+| eventType | 说明 | 附加字段 |
+|-----------|------|---------|
+| `cameraTransitionStart` | 摄像机开始切换 | `target`: 目标视角名 |
+| `cameraTransitionEnd` | 摄像机切换完成 | `target`: 当前视角名 |
+
+进入 `astronaut` 视角时播放 Hello.mp3，离开时播放 Bye.mp3。
+
+#### window.HMI API 封装
+
+```js
+window.HMI = {
+    sendCommand(action, target, params)  // 底层发送
+    switchCamera(view)                    // switchCamera → target=view
+    togglePart(partId)                    // togglePart → target=partId
+    openPart(partId)                      // openPart → target=partId
+    closePart(partId)                     // closePart → target=partId
+    rotateCarTo(angle)                    // rotateCar → target='absolute', params={angle}
+    rotateCarBy(angle)                    // rotateCar → target='relative', params={angle}
+    resetCarRotation()                    // rotateCar → target='reset'
+    getState()                            // getState → target='all'
+}
+```
+
+`window.HMI` 只有在 Unity 加载完成后才存在（见上方 BUG 说明）。
+
+---
+
 ### 核心规则
 
 **一切跟车外观有关的操作** → 自动打开 3D 外部视角 + 执行动画：

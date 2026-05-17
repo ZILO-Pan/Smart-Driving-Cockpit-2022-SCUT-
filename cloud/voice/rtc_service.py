@@ -333,9 +333,10 @@ def _get_tools_definition() -> list:
                                         "type": "string",
                                         "enum": [
                                             "set_ac_temperature", "set_seat_ventilation", "toggle_window",
-                                            "set_ambient_light", "set_cabin_mode", "play_music",
+                                            "set_ambient_light", "set_cabin_mode", "play_music", "play_video",
                                             "set_destination", "change_lane", "open_service_card",
-                                            "show_alert", "toggle_service_panel", "toggle_3d_scene"
+                                            "show_alert", "toggle_service_panel", "toggle_3d_scene",
+                                            "stop_video"
                                         ]
                                     },
                                     "params": {"type": "object"}
@@ -370,15 +371,25 @@ def _get_tools_definition() -> list:
             "type": "function",
             "function": {
                 "name": "media_nav_control",
-                "description": "media and navigation",
+                "description": "媒体与导航控制。播放指定音乐必须用 action=play_music，并在 params.title 中放歌名或歌手；可用歌曲: Starboy, How You Like That, 晴天, Handlebars, Born Again, Toxic Till The End。播放指定视频必须用 action=play_video，并在 params.title 或 params.bvid 中指定内容。",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["play_music", "set_destination", "change_lane"]
+                            "enum": ["play_music", "play_video", "stop_video", "set_destination", "change_lane"]
                         },
-                        "params": {"type": "object"}
+                        "params": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string", "description": "音乐歌名/歌手，或视频标题"},
+                                "artist": {"type": "string"},
+                                "control": {"type": "string", "enum": ["play", "pause", "next", "prev"]},
+                                "bvid": {"type": "string"},
+                                "destination": {"type": "string"},
+                                "direction": {"type": "string"}
+                            }
+                        }
                     },
                     "required": ["action", "params"]
                 }
@@ -388,7 +399,7 @@ def _get_tools_definition() -> list:
             "type": "function",
             "function": {
                 "name": "panel_control",
-                "description": "show/hide HMI panels",
+                "description": "HMI 面板与服务卡控制。打开/关闭 Dock 面板必须带布尔参数：toggle_navigation/toggle_adas/toggle_cabin_cards/toggle_3d_scene 使用 params.show，toggle_service_panel 使用 params.open。打开服务卡用 open_service_card service=alipay/ctrip/music/bilibili/parking/charging/news。",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -396,7 +407,18 @@ def _get_tools_definition() -> list:
                             "type": "string",
                             "enum": ["toggle_adas", "toggle_navigation", "toggle_cabin_cards", "toggle_service_panel", "toggle_3d_scene", "open_service_card", "show_alert"]
                         },
-                        "params": {"type": "object"}
+                        "params": {
+                            "type": "object",
+                            "properties": {
+                                "show": {"type": "boolean"},
+                                "open": {"type": "boolean"},
+                                "service": {
+                                    "type": "string",
+                                    "enum": ["alipay", "ctrip", "music", "bilibili", "parking", "charging", "news"]
+                                },
+                                "message": {"type": "string"}
+                            }
+                        }
                     },
                     "required": ["action", "params"]
                 }
@@ -406,7 +428,7 @@ def _get_tools_definition() -> list:
             "type": "function",
             "function": {
                 "name": "unity_control",
-                "description": "3D scene control",
+                "description": "3D展车控制。可以切换视角、打开/关闭车门车窗/引擎盖/后备箱、旋转车辆。宇航员视角用 switch_camera view=astronaut；车内 view=interior；整车/车外 view=default。打开车门/车窗/引擎盖时用 open_car_part part=doorL/doorR/hood/windowL/windowR，并带 view=front；后备箱带 view=rear。不要用 default 打开部件。",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -414,7 +436,23 @@ def _get_tools_definition() -> list:
                             "type": "string",
                             "enum": ["switch_camera", "reset_camera", "toggle_car_part", "open_car_part", "close_car_part", "rotate_car"]
                         },
-                        "params": {"type": "object"}
+                        "params": {
+                            "type": "object",
+                            "properties": {
+                                "view": {
+                                    "type": "string",
+                                    "enum": ["default", "astronaut", "interior", "front", "rear", "top"],
+                                    "description": "目标视角"
+                                },
+                                "part": {
+                                    "type": "string",
+                                    "enum": ["doorL", "doorR", "hood", "trunk", "windowL", "windowR"],
+                                    "description": "目标部件，未说明左右默认 doorL"
+                                },
+                                "mode": {"type": "string", "enum": ["absolute", "relative", "reset"]},
+                                "angle": {"type": "number"}
+                            }
+                        }
                     },
                     "required": ["action", "params"]
                 }

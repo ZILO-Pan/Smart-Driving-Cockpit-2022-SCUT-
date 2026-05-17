@@ -47,6 +47,13 @@ class ServiceExecutor:
         self.cabin.update(music_playing=True, music_title=title)
         return f"正在播放: {title}"
 
+    def _play_video(self, params):
+        title = params.get("title") or params.get("bvid") or "视频"
+        return f"正在打开视频: {title}"
+
+    def _stop_video(self, params):
+        return "视频已关闭"
+
     def _set_cabin_mode(self, params):
         mode = params.get("mode", "标准")
         self.cabin.update(cabin_mode=mode)
@@ -96,6 +103,8 @@ class ServiceExecutor:
         "toggle_window": _toggle_window,
         "set_ambient_light": _set_ambient_light,
         "play_music": _play_music,
+        "play_video": _play_video,
+        "stop_video": _stop_video,
         "set_cabin_mode": _set_cabin_mode,
         "show_alert": _show_alert,
         "set_destination": _set_destination,

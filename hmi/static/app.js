@@ -61,6 +61,8 @@
     const dock3d = document.getElementById('dock-3d');
 
     let unityLoaded = false;
+    let unityLoading = false;
+    let pendingHMICommands = [];
 
     // Left zone (ADAS)
     dockAdas.classList.add('active');
@@ -101,9 +103,8 @@
     dock3d.addEventListener('click', () => {
         const isOpen = unityOverlay.classList.toggle('active');
         dock3d.classList.toggle('active', isOpen);
-        if (isOpen && !unityLoaded) {
+        if (isOpen && !unityLoaded && !unityLoading) {
             loadUnity();
-            unityLoaded = true;
         }
     });
 
@@ -114,12 +115,19 @@
 
     // ─── Unity Loading ───────────────────────────────────────
     function loadUnity() {
+        if (window.HMI || unityLoaded || unityLoading) return;
+
         if (typeof createUnityInstance === 'undefined') {
             const loading = document.getElementById('unity-loading');
             const textEl = loading.querySelector('.unity-loading-text');
-            textEl.textContent = 'Unity Build not found';
+            textEl.textContent = 'Waiting for Unity loader...';
+            setTimeout(() => {
+                if (!window.HMI && !unityLoading) loadUnity();
+            }, 500);
             return;
         }
+
+        unityLoading = true;
 
         const buildUrl = '/static/unity/ai-car-scene/Build';
         const config = {
@@ -140,10 +148,14 @@
             progressBar.style.width = (progress * 100) + '%';
         }).then((instance) => {
             window.unityInstance = instance;
+            unityLoaded = true;
+            unityLoading = false;
             loading.classList.add('hidden');
             setTimeout(() => loading.remove(), 600);
             setupHMIBridge(instance);
         }).catch((err) => {
+            unityLoading = false;
+            unityLoaded = false;
             console.error('Unity load failed:', err);
             const textEl = loading.querySelector('.unity-loading-text');
             textEl.textContent = 'Failed to load 3D scene';
@@ -152,6 +164,8 @@
 
     // ─── HMI Bridge ──────────────────────────────────────────
     function setupHMIBridge(instance) {
+        unityLoaded = true;
+        unityLoading = false;
         window.HMI = {
             sendCommand(action, target, params) {
                 if (!instance) return;
@@ -174,6 +188,11 @@
             off(fn) { this.listeners = this.listeners.filter(l => l !== fn); },
             emit(evt) { this.listeners.forEach(fn => fn(evt)); }
         };
+
+        while (pendingHMICommands.length > 0) {
+            const cmd = pendingHMICommands.shift();
+            _executeFCAction(cmd.funcName, cmd.params);
+        }
     }
 
     // ─── Audio ───────────────────────────────────────────────
@@ -969,6 +988,36 @@
     let currentTrack = 0;
     let isPlaying = false;
     const audio = new Audio();
+    const MEDIA_NORMAL_VOLUME = 1;
+    const MEDIA_DUCK_VOLUME = 0.2;
+    let mediaDucked = false;
+
+    function setMediaDucking(duck) {
+        mediaDucked = !!duck;
+        const volume = mediaDucked ? MEDIA_DUCK_VOLUME : MEDIA_NORMAL_VOLUME;
+        [audio, audioHello, audioBye].forEach(item => {
+            if (item) item.volume = volume;
+        });
+    }
+    window.setMediaDucking = setMediaDucking;
+
+    function normalizeText(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/\s+/g, '')
+            .replace(/[，。！？、,.!?]/g, '');
+    }
+
+    function findTrackIndex(query, artist) {
+        const key = normalizeText([query, artist].filter(Boolean).join(' '));
+        if (!key) return -1;
+        return playlist.findIndex(track => {
+            const title = normalizeText(track.title);
+            const singer = normalizeText(track.artist);
+            const combined = title + singer;
+            return combined.includes(key) || key.includes(title) || key.includes(singer);
+        });
+    }
 
     function loadTrack(index) {
         currentTrack = index;
@@ -1037,12 +1086,25 @@
         </div>`;
 
     const biliVideos = [
-        { poster: '/static/media/Huntrix.jpg', bvid: 'BV1oeNXzBEK6' },
-        { poster: '/static/media/Interstellar.jpg', bvid: 'BV19A411q7sB' },
-        { poster: '/static/media/Faerwell My Concubine.jpg', bvid: 'BV1wF411S71j' },
-        { poster: '/static/media/The Devil wears Prrada.jpg', bvid: 'BV1dzHzzyERq' },
-        { poster: '/static/media/Nghesieu DE.jpg', bvid: 'BV15czjBNEn6' },
+        { title: 'Huntrix', names: ['huntrix', '猎杀'], poster: '/static/media/Huntrix.jpg', bvid: 'BV1oeNXzBEK6' },
+        { title: 'Interstellar', names: ['interstellar', '星际穿越'], poster: '/static/media/Interstellar.jpg', bvid: 'BV19A411q7sB' },
+        { title: 'Farewell My Concubine', names: ['farewell', 'concubine', '霸王别姬'], poster: '/static/media/Faerwell My Concubine.jpg', bvid: 'BV1wF411S71j' },
+        { title: 'The Devil Wears Prada', names: ['devil', 'prada', '穿普拉达', '女王'], poster: '/static/media/The Devil wears Prrada.jpg', bvid: 'BV1dzHzzyERq' },
+        { title: 'Nghesieu DE', names: ['nghesieu'], poster: '/static/media/Nghesieu DE.jpg', bvid: 'BV15czjBNEn6' },
     ];
+
+    function findVideo(query, bvid) {
+        if (bvid) return biliVideos.find(v => v.bvid === bvid) || { title: bvid, bvid };
+        const key = normalizeText(query);
+        if (!key) return null;
+        return biliVideos.find(video => {
+            const names = [video.title].concat(video.names || []);
+            return names.some(name => {
+                const candidate = normalizeText(name);
+                return candidate.includes(key) || key.includes(candidate);
+            });
+        });
+    }
 
     const bilibiliHTML = `
         <div class="bilibili-inner">
@@ -1105,7 +1167,8 @@
                     let vol = 0;
                     const fadeIn = setInterval(() => {
                         vol += 0.05;
-                        if (vol >= 1) { audio.volume = 1; clearInterval(fadeIn); }
+                        const targetVolume = mediaDucked ? MEDIA_DUCK_VOLUME : MEDIA_NORMAL_VOLUME;
+                        if (vol >= targetVolume) { audio.volume = targetVolume; clearInterval(fadeIn); }
                         else { audio.volume = vol; }
                     }, 50);
                 }
@@ -1175,26 +1238,52 @@
     }
 
     function normalizeServiceName(service) {
+        const raw = service || '';
+        const key = normalizeText(raw);
         const map = {
-            '奶茶': 'alipay',
-            '点奶茶': 'alipay',
-            '支付': 'alipay',
+            'alipay': 'alipay',
             '支付宝': 'alipay',
-            '机票': 'ctrip',
-            '航班': 'ctrip',
+            'ctrip': 'ctrip',
             '携程': 'ctrip',
+            'news': 'news',
             '新闻': 'news',
+            'parking': 'parking',
             '停车': 'parking',
             '停车场': 'parking',
+            'charging': 'charging',
             '充电': 'charging',
+            'music': 'music',
             '音乐': 'music',
+            'bilibili': 'bilibili',
+            'video': 'bilibili',
             '视频': 'bilibili',
         };
-        return map[service] || service || '';
+        if (map[key]) return map[key];
+        if (/奶茶|支付|付款|付费|下单|购买|买单|结账|缴费|订单|电影票/.test(key)) return 'alipay';
+        if (/机票|航班|酒店|出行|旅行/.test(key)) return 'ctrip';
+        if (/新闻|资讯/.test(key)) return 'news';
+        if (/停车/.test(key)) return 'parking';
+        if (/充电/.test(key)) return 'charging';
+        if (/音乐|歌曲|歌/.test(key)) return 'music';
+        if (/视频|电影|b站|bilibili/.test(key)) return 'bilibili';
+        return key || raw;
     }
 
     function showActionResult(action, title, value, meta) {
         upsertCard('fc-' + action, 1, fcStatusCard(title, value, meta), 'fc-card');
+    }
+
+    function closeAllCards() {
+        cards.slice().forEach(card => removeCard(card.id));
+        musicOpen = false;
+        bilibiliOpen = false;
+    }
+
+    function resolveVisibility(params, isCurrentlyVisible) {
+        if (params.show !== undefined) return !!params.show;
+        if (params.open !== undefined) return !!params.open;
+        if (params.visible !== undefined) return !!params.visible;
+        return !isCurrentlyVisible;
     }
 
     function normalizeActionItem(item) {
@@ -1203,6 +1292,115 @@
         const params = item.params || item.parameters || {};
         if (!action) return null;
         return { action, params };
+    }
+
+    function openUnityScene() {
+        const isOpen = unityOverlay.classList.contains('active');
+        if (!isOpen) {
+            unityOverlay.classList.add('active');
+            dock3d.classList.add('active');
+        }
+        if (!unityLoaded && !unityLoading) {
+            loadUnity();
+        }
+    }
+
+    function normalizeCameraView(view) {
+        const key = normalizeText(view || '');
+        const map = {
+            'astronaut': 'astronaut',
+            '宇航员': 'astronaut',
+            '太空人': 'astronaut',
+            'interior': 'interior',
+            '内部': 'interior',
+            '车内': 'interior',
+            '座舱': 'interior',
+            'front': 'front',
+            '正面': 'front',
+            '车头': 'front',
+            'rear': 'rear',
+            '后面': 'rear',
+            '车尾': 'rear',
+            'top': 'top',
+            '俯视': 'top',
+            'default': 'default',
+            '默认': 'default',
+            '整车': 'default',
+            '车': 'default',
+        };
+        return map[key] || view || 'default';
+    }
+
+    function normalizeCarPart(part) {
+        const key = normalizeText(part || '');
+        const map = {
+            'doorl': 'doorL',
+            'leftdoor': 'doorL',
+            '左车门': 'doorL',
+            '左门': 'doorL',
+            '车门': 'doorL',
+            'doorr': 'doorR',
+            'rightdoor': 'doorR',
+            '右车门': 'doorR',
+            '右门': 'doorR',
+            'hood': 'hood',
+            '引擎盖': 'hood',
+            '前盖': 'hood',
+            'trunk': 'trunk',
+            '后备箱': 'trunk',
+            '尾箱': 'trunk',
+            'windowl': 'windowL',
+            '左车窗': 'windowL',
+            '车窗': 'windowL',
+            'windowr': 'windowR',
+            '右车窗': 'windowR',
+        };
+        return map[key] || part || 'doorL';
+    }
+
+    function queueHMICommand(funcName, params) {
+        const command = { funcName, params: params || {} };
+        const signature = JSON.stringify(command);
+        const alreadyQueued = pendingHMICommands.some(item => JSON.stringify(item) === signature);
+        if (!alreadyQueued) pendingHMICommands.push(command);
+    }
+
+    function defaultPartView(part) {
+        const normalized = normalizeCarPart(part);
+        if (normalized === 'hood') return 'front';
+        if (normalized === 'trunk') return 'rear';
+        return 'front';
+    }
+
+    function runHMICommand(funcName, params) {
+        params = params || {};
+        openUnityScene();
+        if (!window.HMI) {
+            queueHMICommand(funcName, params);
+            return;
+        }
+        if (funcName === 'switch_camera') window.HMI.switchCamera(normalizeCameraView(params.view));
+        else if (funcName === 'reset_camera') window.HMI.sendCommand('resetCamera');
+        else if (funcName === 'toggle_car_part' || funcName === 'open_car_part' || funcName === 'close_car_part') {
+            const part = normalizeCarPart(params.part);
+            let view = normalizeCameraView(params.view || defaultPartView(part));
+            if (view === 'default' || view === 'astronaut') view = defaultPartView(part);
+            window.HMI.switchCamera(view);
+            setTimeout(() => {
+                if (funcName === 'toggle_car_part') window.HMI.togglePart(part);
+                else if (funcName === 'open_car_part') window.HMI.openPart(part);
+                else window.HMI.closePart(part);
+            }, 260);
+        }
+        else if (funcName === 'rotate_car') {
+            if (params.mode === 'absolute') window.HMI.rotateCarTo(params.angle || 0);
+            else if (params.mode === 'relative') window.HMI.rotateCarBy(params.angle || 90);
+            else window.HMI.resetCarRotation();
+        }
+    }
+
+    function focusInteriorView() {
+        runHMICommand('switch_camera', { view: 'interior' });
     }
 
     function rebindPlayerButtons() {
@@ -1278,10 +1476,9 @@
         });
     });
 
-    // Default: music open, bilibili via select panel
-    musicOpen = true;
-    bilibiliOpen = true;
-    handleMusicBilibili();
+    // Start clean; voice or service clicks should open exactly the requested card.
+    musicOpen = false;
+    bilibiliOpen = false;
 
     // ─── Bilibili Poster Click → iframe Player ───────────────
     function bindPosterClicks() {}
@@ -1611,6 +1808,7 @@
 
     // ─── FC Action Executor ─────────────────────────────────
     function _executeFCAction(funcName, params) {
+        params = params || {};
         console.log('[FC] Executing HMI action:', funcName, params);
         switch (funcName) {
             case 'proactive_service_plan': {
@@ -1621,14 +1819,21 @@
                     : null;
                 const reason = params.reason || params.hmi_feedback || '已识别用户需求并生成服务计划';
                 const actions = Array.isArray(params.actions) ? params.actions : [];
-                const planHtml = `<div class="fc-status-card">
-                    <span class="fc-kicker">INTENT UNDERSTANDING</span>
-                    <span class="fc-title">${intent}</span>
-                    <span class="fc-value">${confidence !== null && !Number.isNaN(confidence) ? confidence + '%' : 'PLAN'}</span>
-                    <span class="fc-meta">${reason}</span>
-                </div>`;
-                upsertCard('fc-intent', 1, planHtml, 'fc-card');
-                actions.map(normalizeActionItem).filter(Boolean).forEach(item => {
+                const normalizedActions = actions.map(normalizeActionItem).filter(Boolean);
+                const shouldShowIntentCard = normalizedActions.length > 1
+                    || /thermal|fatigue|travel|driving|emotion/i.test(intent);
+                if (shouldShowIntentCard) {
+                    const planHtml = `<div class="fc-status-card">
+                        <span class="fc-kicker">INTENT UNDERSTANDING</span>
+                        <span class="fc-title">${intent}</span>
+                        <span class="fc-value">${confidence !== null && !Number.isNaN(confidence) ? confidence + '%' : 'PLAN'}</span>
+                        <span class="fc-meta">${reason}</span>
+                    </div>`;
+                    upsertCard('fc-intent', 1, planHtml, 'fc-card');
+                } else if (cards.find(c => c.id === 'fc-intent')) {
+                    removeCard('fc-intent');
+                }
+                normalizedActions.forEach(item => {
                     _executeFCAction(item.action, item.params);
                 });
                 break;
@@ -1637,32 +1842,72 @@
                 const temp = params.temperature ?? params.temp ?? 22;
                 showActionResult('ac', 'Climate', `${temp}°C`, '空调温度已调整');
                 document.documentElement.style.setProperty('--accent-cyan', temp <= 22 ? '#3bd5ff' : '#ff9500');
+                focusInteriorView();
                 break;
             }
             case 'set_seat_ventilation': {
                 const on = params.on !== false;
                 showActionResult('seat', 'Seat Ventilation', on ? 'ON' : 'OFF', on ? '座椅通风已开启' : '座椅通风已关闭');
+                focusInteriorView();
                 break;
             }
             case 'toggle_window': {
                 const open = params.open !== false;
                 showActionResult('window', 'Window', open ? 'OPEN' : 'CLOSED', open ? '车窗已打开' : '车窗已关闭');
-                if (window.HMI && open) window.HMI.openPart && window.HMI.openPart('windowL');
-                if (window.HMI && !open) window.HMI.closePart && window.HMI.closePart('windowL');
+                runHMICommand(open ? 'open_car_part' : 'close_car_part', { part: params.part || 'windowL' });
                 break;
             }
             case 'open_service_card': {
                 const svc = normalizeServiceName(params.service || params.card || params.name);
-                if (svc === 'music') { musicOpen = true; handleMusicBilibili(); }
-                else if (svc === 'video' || svc === 'bilibili') { bilibiliOpen = true; handleMusicBilibili(); }
-                else if (serviceTemplates[svc]) { upsertCard(svc, 1, serviceTemplates[svc], ''); }
+                if (svc === 'music') { musicOpen = true; bilibiliOpen = false; handleMusicBilibili(); }
+                else if (svc === 'video' || svc === 'bilibili') { musicOpen = false; bilibiliOpen = true; handleMusicBilibili(); }
+                else if (serviceTemplates[svc]) {
+                    const screenshot = /^(alipay|ctrip|news)$/.test(svc) ? 'screenshot-card' : '';
+                    upsertCard(svc, 1, serviceTemplates[svc], screenshot);
+                }
                 else { showActionResult('service', 'Service', params.service || svc || 'Open', '服务界面已调出'); }
                 break;
             }
             case 'play_music': {
-                const title = params.title || 'Music';
-                if (!isPlaying && audio) { audio.play(); isPlaying = true; }
-                showActionResult('music', 'Now Playing', title, '音乐服务已启动');
+                const control = normalizeText(params.control || 'play');
+                musicOpen = true;
+                bilibiliOpen = false;
+                handleMusicBilibili();
+                if (control === 'pause' || control === 'stop') {
+                    window.MediaControl.pause();
+                    showActionResult('music', 'Music', 'PAUSED', '音乐已暂停');
+                    break;
+                }
+                if (control === 'next' || control === '下一首') {
+                    window.MediaControl.next();
+                } else if (control === 'prev' || control === 'previous' || control === '上一首') {
+                    window.MediaControl.prev();
+                } else {
+                    const query = params.title || params.artist || params.query || params.name || '';
+                    const idx = findTrackIndex(query, params.artist);
+                    if (idx !== -1) window.MediaControl.playTrack(idx);
+                    else window.MediaControl.play();
+                }
+                break;
+            }
+            case 'play_video': {
+                const video = findVideo(params.title || params.query || params.name, params.bvid);
+                if (video && video.bvid) {
+                    openBiliPlayer(video.bvid);
+                } else {
+                    musicOpen = false;
+                    bilibiliOpen = true;
+                    handleMusicBilibili();
+                }
+                break;
+            }
+            case 'stop_video': {
+                removeCard('bili-player');
+                showActionResult('video', 'Bilibili', 'CLOSED', '视频已关闭');
+                break;
+            }
+            case 'close_all_cards': {
+                closeAllCards();
                 break;
             }
             case 'set_cabin_mode': {
@@ -1670,6 +1915,7 @@
                 showActionResult('mode', 'Cabin Mode', mode, '座舱模式已切换');
                 dockCabin.classList.add('active');
                 zoneRight.classList.remove('hidden');
+                focusInteriorView();
                 break;
             }
             case 'show_alert': {
@@ -1684,6 +1930,7 @@
                 const color = params.color || '蓝';
                 document.documentElement.style.setProperty('--accent-cyan', _colorMap(color));
                 showActionResult('light', 'Ambient Light', color, '氛围灯已调整');
+                focusInteriorView();
                 break;
             }
             case 'set_destination': {
@@ -1711,39 +1958,39 @@
             }
             // ─── Dock 面板控制 ───
             case 'toggle_adas': {
-                const show = params.show;
                 const hidden = zoneLeft.classList.contains('hidden');
-                if (show && hidden) { zoneLeft.classList.remove('hidden'); dockAdas.classList.add('active'); }
-                else if (!show && !hidden) { zoneLeft.classList.add('hidden'); dockAdas.classList.remove('active'); }
+                const show = resolveVisibility(params, !hidden);
+                if (show) { zoneLeft.classList.remove('hidden'); dockAdas.classList.add('active'); }
+                else { zoneLeft.classList.add('hidden'); dockAdas.classList.remove('active'); }
                 break;
             }
             case 'toggle_navigation': {
-                const show = params.show;
                 const hidden = zoneCenter.classList.contains('hidden');
-                if (show && hidden) { zoneCenter.classList.remove('hidden'); dockNav.classList.add('active'); }
-                else if (!show && !hidden) { zoneCenter.classList.add('hidden'); dockNav.classList.remove('active'); }
+                const show = resolveVisibility(params, !hidden);
+                if (show) { zoneCenter.classList.remove('hidden'); dockNav.classList.add('active'); }
+                else { zoneCenter.classList.add('hidden'); dockNav.classList.remove('active'); }
                 break;
             }
             case 'toggle_cabin_cards': {
-                const show = params.show;
                 const hidden = zoneRight.classList.contains('hidden');
-                if (show && hidden) { zoneRight.classList.remove('hidden'); dockCabin.classList.add('active'); }
-                else if (!show && !hidden) { zoneRight.classList.add('hidden'); dockCabin.classList.remove('active'); }
+                const show = resolveVisibility(params, !hidden);
+                if (show) { zoneRight.classList.remove('hidden'); dockCabin.classList.add('active'); }
+                else { zoneRight.classList.add('hidden'); dockCabin.classList.remove('active'); }
                 break;
             }
             case 'toggle_service_panel': {
-                const open = params.open;
+                const open = resolveVisibility(params, servicePanel.classList.contains('open'));
                 if (open) { servicePanel.classList.add('open'); dockService.classList.add('active'); }
                 else { servicePanel.classList.remove('open'); dockService.classList.remove('active'); }
                 break;
             }
             case 'toggle_3d_scene': {
-                const show = params.show;
                 const isOpen = unityOverlay.classList.contains('active');
-                if (show && !isOpen) {
+                const show = resolveVisibility(params, isOpen);
+                if (show) {
                     unityOverlay.classList.add('active'); dock3d.classList.add('active');
-                    if (!unityLoaded) { loadUnity(); unityLoaded = true; }
-                } else if (!show && isOpen) {
+                    if (!unityLoaded && !unityLoading) loadUnity();
+                } else {
                     unityOverlay.classList.remove('active'); dock3d.classList.remove('active');
                 }
                 break;
@@ -1755,23 +2002,7 @@
             case 'open_car_part':
             case 'close_car_part':
             case 'rotate_car': {
-                // Auto-open 3D scene if not already visible
-                const isOpen = unityOverlay.classList.contains('active');
-                if (!isOpen) {
-                    unityOverlay.classList.add('active'); dock3d.classList.add('active');
-                    if (!unityLoaded) { loadUnity(); unityLoaded = true; }
-                }
-                if (!window.HMI) break;
-                if (funcName === 'switch_camera') window.HMI.switchCamera(params.view);
-                else if (funcName === 'reset_camera') window.HMI.sendCommand('resetCamera');
-                else if (funcName === 'toggle_car_part') window.HMI.togglePart(params.part);
-                else if (funcName === 'open_car_part') window.HMI.openPart(params.part);
-                else if (funcName === 'close_car_part') window.HMI.closePart(params.part);
-                else if (funcName === 'rotate_car') {
-                    if (params.mode === 'absolute') window.HMI.rotateCarTo(params.angle || 0);
-                    else if (params.mode === 'relative') window.HMI.rotateCarBy(params.angle || 90);
-                    else window.HMI.resetCarRotation();
-                }
+                runHMICommand(funcName, params);
                 break;
             }
         }

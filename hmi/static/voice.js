@@ -19,6 +19,10 @@
     let engine = null;
     let isActive = false;
     let isConnecting = false;
+    let lastUserText = '';
+    let lastInstantSignature = '';
+    let lastInstantAt = 0;
+    let currentNovaState = 'idle';
     const ROOM_ID = 'nova_room_001';
     const USER_ID = 'hmi_user_' + Date.now().toString(36);
     const BOT_USER_ID = 'NOVA_bot';
@@ -54,6 +58,7 @@
     }
 
     function setNovaState(state) {
+        currentNovaState = state;
         if (!stateLabel) return;
         const states = {
             'idle': { text: 'Ready', cls: 'state-idle' },
@@ -73,6 +78,10 @@
             else if (state === 'speaking') orb.classList.add('nova-speaking');
             else if (state === 'thinking') orb.classList.add('nova-thinking');
             else if (state === 'connecting') orb.classList.add('nova-connecting');
+        }
+
+        if (window.setMediaDucking) {
+            window.setMediaDucking(state === 'speaking');
         }
     }
 
@@ -403,10 +412,26 @@
             return;
         }
 
-        if (magic === 'subt' || parsed.text !== undefined) {
+        if (magic === 'subv' && Array.isArray(parsed.data)) {
+            const finalItems = parsed.data.filter(item => item && item.definite && item.text);
+            const latest = finalItems[finalItems.length - 1] || parsed.data.find(item => item && item.text);
+            const text = latest ? String(latest.text || '').trim() : '';
+            if (text) {
+                const likelyAssistant = currentNovaState === 'speaking' || /^(好的|已|正在|我来|可以|当然|没问题)/.test(text);
+                if (likelyAssistant) {
+                    setReply(text);
+                } else {
+                    lastUserText = text;
+                    _tryInstantHMIShortcut(text);
+                    setTranscript(text);
+                }
+            }
+        } else if (magic === 'subt' || parsed.text !== undefined) {
             const text = parsed.text || parsed.data || '';
             const isUser = parsed.role === 'user' || parsed.is_user;
             if (isUser) {
+                lastUserText = text;
+                _tryInstantHMIShortcut(text);
                 setTranscript(text);
             } else {
                 setReply(text);
@@ -456,9 +481,17 @@
             console.log('[NOVA-FC] Unpack grouped:', funcName, '→', realAction, realParams);
         }
 
+        const normalized = _normalizeActionFromUserText(realAction, realParams);
+        const backendFunction = normalized.changed ? normalized.action : funcName;
+        const backendParams = normalized.changed ? normalized.params : args;
+        realAction = normalized.action;
+        realParams = normalized.params;
+
         // query_state 不需要前端执行（纯查询，后端返回结果给 AI 播报）
         if (realAction !== 'query_state' && window._executeFCAction) {
-            window._executeFCAction(realAction, realParams);
+            const signature = _actionSignature(realAction, realParams);
+            const recentlyDone = signature === lastInstantSignature && Date.now() - lastInstantAt < 2600;
+            if (!recentlyDone) window._executeFCAction(realAction, realParams);
         }
 
         // 通知后端执行（传原始分组工具名，让后端自己分发）
@@ -467,8 +500,8 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 room_id: ROOM_ID,
-                function: funcName,
-                params: args,
+                function: backendFunction,
+                params: backendParams,
                 call_id: callId,
                 client_executed: realAction !== 'query_state',
             }),
@@ -477,6 +510,236 @@
         }).catch(() => {
             setReply('已执行: ' + realAction);
         });
+    }
+
+    function _isMusicService(params) {
+        const service = String(params?.service || params?.card || params?.name || '').toLowerCase();
+        return /music|音乐|歌曲|歌/.test(service);
+    }
+
+    function _looksLikeMusicPlayback(text) {
+        return /播放|放一下|听|来一首|下一首|上一首|暂停|继续|starboy|晴天|blackpink|周杰伦|weeknd|jennie|lisa|ros[eé]|born|toxic|handlebars/i.test(text || '');
+    }
+
+    function _normalizeText(text) {
+        return String(text || '').toLowerCase().replace(/\s+/g, '');
+    }
+
+    function _actionSignature(action, params) {
+        return action + ':' + JSON.stringify(params || {});
+    }
+
+    function _boolIntentFromText(text) {
+        const raw = text || '';
+        if (/关闭|关掉|隐藏|收起|不要显示|close|hide/i.test(raw)) return false;
+        if (/打开|开启|显示|展开|进入|切到|切换到|open|show/i.test(raw)) return true;
+        return undefined;
+    }
+
+    function _dockActionsFromText(text) {
+        const raw = text || '';
+        const open = _boolIntentFromText(raw);
+        if (open === undefined) return [];
+        const actions = [];
+        if (/导航|地图|路线|nav/i.test(raw)) actions.push({ action: 'toggle_navigation', params: { show: open } });
+        if (/adas|ads|智驾|驾驶辅助|辅助驾驶|左侧/i.test(raw)) actions.push({ action: 'toggle_adas', params: { show: open } });
+        if (/服务面板|服务列表|应用面板|应用列表|service/i.test(raw)) actions.push({ action: 'toggle_service_panel', params: { open } });
+        if (/右侧卡片|卡片区|座舱卡片|cabin/i.test(raw)) actions.push({ action: 'toggle_cabin_cards', params: { show: open } });
+        if (/3d|展车|车模|unity|三维/i.test(raw)) actions.push({ action: 'toggle_3d_scene', params: { show: open } });
+        return actions;
+    }
+
+    function _serviceActionFromText(text) {
+        const raw = text || '';
+        const key = _normalizeText(raw);
+        if (!/打开|开启|进入|看|我要|想|帮我|支付|付款|下单|点|播放|听/i.test(raw)) return null;
+        if (/支付宝|支付|付款|付费|奶茶|下单|买单|结账|缴费/i.test(raw)) return { action: 'open_service_card', params: { service: 'alipay' } };
+        if (/携程|机票|航班|酒店|旅行/i.test(raw)) return { action: 'open_service_card', params: { service: 'ctrip' } };
+        if (/新闻|资讯/i.test(raw)) return { action: 'open_service_card', params: { service: 'news' } };
+        if (/停车|车位/i.test(raw)) return { action: 'open_service_card', params: { service: 'parking' } };
+        if (/充电|充电桩/i.test(raw)) return { action: 'open_service_card', params: { service: 'charging' } };
+        if (/b站|bilibili|视频|电影|星际穿越|霸王别姬|普拉达|huntrix|interstellar/i.test(raw)) {
+            if (/星际穿越|霸王别姬|普拉达|huntrix|interstellar|farewell|devil/i.test(raw)) {
+                return { action: 'play_video', params: { title: raw } };
+            }
+            return { action: 'open_service_card', params: { service: 'bilibili' } };
+        }
+        if (_looksLikeMusicPlayback(raw)) {
+            return {
+                action: 'play_music',
+                params: {
+                    title: raw,
+                    control: /暂停|停一下/i.test(raw) ? 'pause' : /下一首/i.test(raw) ? 'next' : /上一首/i.test(raw) ? 'prev' : 'play',
+                }
+            };
+        }
+        if (/音乐|歌曲/.test(key)) return { action: 'open_service_card', params: { service: 'music' } };
+        return null;
+    }
+
+    function _navigationActionFromText(text) {
+        const raw = text || '';
+        if (!/去|到|导航|路线|目的地|下班/i.test(raw)) return null;
+        let destination = '';
+        const match = raw.match(/(?:去|到|导航到|目的地是)(.+)$/);
+        if (match) destination = match[1].replace(/吧|呀|啊|。|，|,/g, '').trim();
+        if (/吃饭|餐厅|晚饭|午饭/i.test(raw)) destination = destination || '附近餐厅';
+        if (/回家/i.test(raw)) destination = '家';
+        if (/公司|上班/i.test(raw)) destination = '公司';
+        if (!destination) return null;
+        return { action: 'set_destination', params: { destination } };
+    }
+
+    function _cameraViewFromText(text) {
+        const raw = text || '';
+        if (/宇航员|太空人|astronaut/i.test(raw)) return 'astronaut';
+        if (/车内|内部|座舱|内饰|interior/i.test(raw)) return 'interior';
+        if (/正面|车头|front/i.test(raw)) return 'front';
+        if (/后面|车尾|rear/i.test(raw)) return 'rear';
+        if (/俯视|顶部|top/i.test(raw)) return 'top';
+        if (/整车|车外|车的视角|默认视角|default/i.test(raw)) return 'default';
+        return '';
+    }
+
+    function _carPartFromText(text) {
+        const raw = text || '';
+        if (/右车门|右门|副驾门|doorr|rightdoor/i.test(raw)) return 'doorR';
+        if (/左车门|左门|主驾门|车门|doorl|leftdoor|door/i.test(raw)) return 'doorL';
+        if (/引擎盖|前盖|hood/i.test(raw)) return 'hood';
+        if (/后备箱|尾箱|trunk/i.test(raw)) return 'trunk';
+        if (/右车窗|windowr/i.test(raw)) return 'windowR';
+        if (/左车窗|车窗|windowl|window/i.test(raw)) return 'windowL';
+        return '';
+    }
+
+    function _runInstantAction(action, params) {
+        if (!window._executeFCAction) return false;
+        const signature = _actionSignature(action, params);
+        const now = Date.now();
+        if (signature === lastInstantSignature && now - lastInstantAt < 1800) return false;
+        lastInstantSignature = signature;
+        lastInstantAt = now;
+        console.log('[NOVA-INSTANT]', action, params);
+        window._executeFCAction(action, params || {});
+        return true;
+    }
+
+    function _tryInstantHMIShortcut(text) {
+        const raw = text || '';
+        const key = _normalizeText(raw);
+        if (!key) return false;
+
+        if (/关闭|清空|收起|关掉/.test(raw) && /卡片|这些|右侧/.test(raw)) {
+            return _runInstantAction('close_all_cards', {});
+        }
+
+        const dockActions = _dockActionsFromText(raw);
+        if (dockActions.length) {
+            let executed = false;
+            dockActions.forEach(item => {
+                executed = _runInstantAction(item.action, item.params) || executed;
+            });
+            return executed;
+        }
+
+        const navigation = _navigationActionFromText(raw);
+        if (navigation) return _runInstantAction(navigation.action, navigation.params);
+
+        const service = _serviceActionFromText(raw);
+        if (service) return _runInstantAction(service.action, service.params);
+
+        const view = _cameraViewFromText(raw);
+        if (view) return _runInstantAction('switch_camera', { view });
+
+        const wantsClose = /关闭|关上|合上|收起|close/i.test(raw);
+        const wantsOpen = /打开|开启|开一下|open/i.test(raw);
+        if (!wantsOpen && !wantsClose) return false;
+
+        const part = _carPartFromText(raw);
+        if (!part) return false;
+
+        return _runInstantAction(wantsClose ? 'close_car_part' : 'open_car_part', {
+            part,
+            view: 'front',
+        });
+    }
+
+    function _normalizeActionFromUserText(action, params) {
+        const nextParams = Object.assign({}, params || {});
+        const utterance = lastUserText || (transcript ? transcript.textContent : '') || '';
+
+        if (action === 'switch_camera') {
+            const view = _cameraViewFromText(utterance);
+            if (view && nextParams.view !== view) {
+                nextParams.view = view;
+                return { action, params: nextParams, changed: true };
+            }
+        }
+
+        if (action === 'open_car_part' || action === 'close_car_part' || action === 'toggle_car_part') {
+            const part = _carPartFromText(utterance);
+            let changed = false;
+            if (part && nextParams.part !== part) {
+                nextParams.part = part;
+                changed = true;
+            }
+            if (!nextParams.view) {
+                nextParams.view = 'front';
+                changed = true;
+            } else if (nextParams.view === 'default' || nextParams.view === 'astronaut') {
+                nextParams.view = 'front';
+                changed = true;
+            }
+            if (changed) return { action, params: nextParams, changed: true };
+        }
+
+        if (action === 'open_service_card' && /关闭|清空|收起|关掉/.test(utterance) && /卡片|这些|右侧/.test(utterance)) {
+            return { action: 'close_all_cards', params: {}, changed: true };
+        }
+
+        if (action === 'set_destination') {
+            const nav = _navigationActionFromText(utterance);
+            if (nav && nav.params.destination && nextParams.destination !== nav.params.destination) {
+                nextParams.destination = nav.params.destination;
+                return { action, params: nextParams, changed: true };
+            }
+        }
+
+        if (/^toggle_(adas|navigation|cabin_cards|service_panel|3d_scene)$/.test(action)) {
+            const desired = _boolIntentFromText(utterance);
+            if (desired !== undefined) {
+                if (action === 'toggle_service_panel') {
+                    if (nextParams.open !== desired) {
+                        nextParams.open = desired;
+                        return { action, params: nextParams, changed: true };
+                    }
+                } else if (nextParams.show !== desired) {
+                    nextParams.show = desired;
+                    return { action, params: nextParams, changed: true };
+                }
+            }
+        }
+
+        if (action === 'open_service_card' && _isMusicService(nextParams) && _looksLikeMusicPlayback(utterance)) {
+            return {
+                action: 'play_music',
+                params: {
+                    title: utterance,
+                    control: /暂停|停一下/i.test(utterance) ? 'pause' : /下一首/i.test(utterance) ? 'next' : /上一首/i.test(utterance) ? 'prev' : 'play',
+                },
+                changed: true,
+            };
+        }
+
+        if (action === 'play_music') {
+            const hasSelector = nextParams.title || nextParams.artist || nextParams.query || nextParams.name;
+            if (!hasSelector && utterance) {
+                nextParams.title = utterance;
+                return { action, params: nextParams, changed: true };
+            }
+        }
+
+        return { action, params: nextParams, changed: false };
     }
 
     // ─── FC 消息处理（来自 WebSocket 推送的兼容接口） ───────

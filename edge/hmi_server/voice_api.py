@@ -183,7 +183,7 @@ async def function_calling_callback(request: Request):
 _GROUPED_TOOL_DISPATCH = {
     "cabin_control": {"set_ac_temperature", "set_seat_ventilation", "toggle_window",
                       "set_ambient_light", "set_cabin_mode"},
-    "media_nav_control": {"play_music", "set_destination", "change_lane"},
+    "media_nav_control": {"play_music", "play_video", "stop_video", "set_destination", "change_lane"},
     "panel_control": {"toggle_adas", "toggle_navigation", "toggle_cabin_cards",
                       "toggle_service_panel", "toggle_3d_scene",
                       "open_service_card", "show_alert"},
@@ -222,6 +222,8 @@ def _execute_function(func_name: str, params: dict) -> str:
             "toggle_window": f"车窗已{'打开' if params.get('open') else '关闭'}",
             "set_ambient_light": f"氛围灯已切换为{params.get('color', '?')}色",
             "play_music": f"正在播放{params.get('title', '音乐')}",
+            "play_video": f"正在打开{params.get('title') or params.get('bvid') or '视频'}",
+            "stop_video": "已关闭视频",
             "set_cabin_mode": f"已切换到{params.get('mode', '?')}模式",
             "set_destination": f"导航目的地已设为{params.get('destination', '?')}",
             "change_lane": f"正在向{params.get('direction', '?')}变道",
@@ -338,7 +340,9 @@ async def fc_execute_from_client(req: FCExecuteRequest):
     if session and req.call_id:
         task_id = session.get("task_id", "")
         if task_id:
-            update_voice_chat(req.room_id, task_id, req.call_id, result_text)
+            asyncio.create_task(asyncio.to_thread(
+                update_voice_chat, req.room_id, task_id, req.call_id, result_text
+            ))
 
     return {"status": "ok", "result": result_text}
 
