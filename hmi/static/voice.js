@@ -22,6 +22,8 @@
     let lastUserText = '';
     let lastInstantSignature = '';
     let lastInstantAt = 0;
+    const recentInstantActions = new Map();
+    const instantRoundActions = new Map();
     let currentNovaState = 'idle';
     const ROOM_ID = 'nova_room_001';
     const USER_ID = 'hmi_user_' + Date.now().toString(36);
@@ -417,12 +419,14 @@
             const latest = finalItems[finalItems.length - 1] || parsed.data.find(item => item && item.text);
             const text = latest ? String(latest.text || '').trim() : '';
             if (text) {
+                const roundId = latest ? latest.roundId : undefined;
+                const finalText = latest ? !!latest.definite : false;
                 const likelyAssistant = currentNovaState === 'speaking' || /^(好的|已|正在|我来|可以|当然|没问题)/.test(text);
                 if (likelyAssistant) {
                     setReply(text);
                 } else {
                     lastUserText = text;
-                    _tryInstantHMIShortcut(text);
+                    _tryInstantHMIShortcut(text, { roundId, finalText });
                     setTranscript(text);
                 }
             }
@@ -431,7 +435,7 @@
             const isUser = parsed.role === 'user' || parsed.is_user;
             if (isUser) {
                 lastUserText = text;
-                _tryInstantHMIShortcut(text);
+                _tryInstantHMIShortcut(text, { roundId: parsed.roundId ?? parsed.round_id, finalText: parsed.definite ?? true });
                 setTranscript(text);
             } else {
                 setReply(text);
@@ -490,7 +494,7 @@
         // query_state 不需要前端执行（纯查询，后端返回结果给 AI 播报）
         if (realAction !== 'query_state' && window._executeFCAction) {
             const signature = _actionSignature(realAction, realParams);
-            const recentlyDone = signature === lastInstantSignature && Date.now() - lastInstantAt < 2600;
+            const recentlyDone = Date.now() - (recentInstantActions.get(signature) || 0) < 3600;
             if (!recentlyDone) window._executeFCAction(realAction, realParams);
         }
 
@@ -580,6 +584,8 @@
     function _navigationActionFromText(text) {
         const raw = text || '';
         if (!/去|到|导航|路线|目的地|下班/i.test(raw)) return null;
+        if (/视角|镜头|相机|回到默认|默认视角/i.test(raw) && !/导航|路线|目的地/i.test(raw)) return null;
+        if (/宇航员|太空人|astronaut/i.test(raw) && !/导航|路线|目的地|开车|带我|送我|去/i.test(raw)) return null;
         let destination = '';
         const match = raw.match(/(?:去|到|导航到|目的地是)(.+)$/);
         if (match) destination = match[1].replace(/吧|呀|啊|。|，|,/g, '').trim();
@@ -593,11 +599,9 @@
     function _cameraViewFromText(text) {
         const raw = text || '';
         if (/宇航员|太空人|astronaut/i.test(raw)) return 'astronaut';
-        if (/车内|内部|座舱|内饰|interior/i.test(raw)) return 'interior';
-        if (/正面|车头|front/i.test(raw)) return 'front';
-        if (/后面|车尾|rear/i.test(raw)) return 'rear';
-        if (/俯视|顶部|top/i.test(raw)) return 'top';
-        if (/整车|车外|车的视角|默认视角|default/i.test(raw)) return 'default';
+        if (/车内|内部|座舱|内饰|interior/i.test(raw)) return 'carInterior';
+        if (/正面|车头|车外|整车|车的视角|front|rear|top|后面|车尾|俯视|顶部/i.test(raw)) return 'carExterior';
+        if (/回到默认|默认视角|default/i.test(raw)) return 'default';
         return '';
     }
 
@@ -612,44 +616,65 @@
         return '';
     }
 
-    function _runInstantAction(action, params) {
+    function _rememberInstantAction(signature, roundKey) {
+        const now = Date.now();
+        recentInstantActions.set(signature, now);
+        for (const [key, timestamp] of recentInstantActions) {
+            if (now - timestamp > 8000) recentInstantActions.delete(key);
+        }
+
+        if (roundKey !== undefined && roundKey !== null && roundKey !== '') {
+            const set = instantRoundActions.get(roundKey) || new Set();
+            set.add(signature);
+            instantRoundActions.set(roundKey, set);
+            if (instantRoundActions.size > 8) {
+                const firstKey = instantRoundActions.keys().next().value;
+                instantRoundActions.delete(firstKey);
+            }
+        }
+    }
+
+    function _runInstantAction(action, params, meta) {
         if (!window._executeFCAction) return false;
         const signature = _actionSignature(action, params);
         const now = Date.now();
-        if (signature === lastInstantSignature && now - lastInstantAt < 1800) return false;
+        const roundKey = meta && meta.roundId !== undefined && meta.roundId !== null ? String(meta.roundId) : '';
+        if (roundKey && instantRoundActions.get(roundKey)?.has(signature)) return false;
+        if (now - (recentInstantActions.get(signature) || 0) < 3600) return false;
         lastInstantSignature = signature;
         lastInstantAt = now;
+        _rememberInstantAction(signature, roundKey);
         console.log('[NOVA-INSTANT]', action, params);
         window._executeFCAction(action, params || {});
         return true;
     }
 
-    function _tryInstantHMIShortcut(text) {
+    function _tryInstantHMIShortcut(text, meta) {
         const raw = text || '';
         const key = _normalizeText(raw);
         if (!key) return false;
 
         if (/关闭|清空|收起|关掉/.test(raw) && /卡片|这些|右侧/.test(raw)) {
-            return _runInstantAction('close_all_cards', {});
+            return _runInstantAction('close_all_cards', {}, meta);
         }
 
         const dockActions = _dockActionsFromText(raw);
         if (dockActions.length) {
             let executed = false;
             dockActions.forEach(item => {
-                executed = _runInstantAction(item.action, item.params) || executed;
+                executed = _runInstantAction(item.action, item.params, meta) || executed;
             });
             return executed;
         }
 
+        const view = _cameraViewFromText(raw);
+        if (view) return _runInstantAction('switch_camera', { view }, meta);
+
         const navigation = _navigationActionFromText(raw);
-        if (navigation) return _runInstantAction(navigation.action, navigation.params);
+        if (navigation) return _runInstantAction(navigation.action, navigation.params, meta);
 
         const service = _serviceActionFromText(raw);
-        if (service) return _runInstantAction(service.action, service.params);
-
-        const view = _cameraViewFromText(raw);
-        if (view) return _runInstantAction('switch_camera', { view });
+        if (service) return _runInstantAction(service.action, service.params, meta);
 
         const wantsClose = /关闭|关上|合上|收起|close/i.test(raw);
         const wantsOpen = /打开|开启|开一下|open/i.test(raw);
@@ -660,8 +685,8 @@
 
         return _runInstantAction(wantsClose ? 'close_car_part' : 'open_car_part', {
             part,
-            view: 'front',
-        });
+            view: 'carExterior',
+        }, meta);
     }
 
     function _normalizeActionFromUserText(action, params) {
@@ -684,10 +709,10 @@
                 changed = true;
             }
             if (!nextParams.view) {
-                nextParams.view = 'front';
+                nextParams.view = 'carExterior';
                 changed = true;
-            } else if (nextParams.view === 'default' || nextParams.view === 'astronaut') {
-                nextParams.view = 'front';
+            } else if (nextParams.view === 'default' || nextParams.view === 'astronaut' || nextParams.view === 'front' || nextParams.view === 'rear' || nextParams.view === 'top') {
+                nextParams.view = 'carExterior';
                 changed = true;
             }
             if (changed) return { action, params: nextParams, changed: true };
@@ -698,6 +723,10 @@
         }
 
         if (action === 'set_destination') {
+            const view = _cameraViewFromText(utterance);
+            if (view) {
+                return { action: 'switch_camera', params: { view }, changed: true };
+            }
             const nav = _navigationActionFromText(utterance);
             if (nav && nav.params.destination && nextParams.destination !== nav.params.destination) {
                 nextParams.destination = nav.params.destination;

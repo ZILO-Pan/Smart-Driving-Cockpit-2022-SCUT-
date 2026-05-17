@@ -1311,20 +1311,27 @@
             'astronaut': 'astronaut',
             '宇航员': 'astronaut',
             '太空人': 'astronaut',
-            'interior': 'interior',
-            '内部': 'interior',
-            '车内': 'interior',
-            '座舱': 'interior',
-            'front': 'front',
-            '正面': 'front',
-            '车头': 'front',
-            'rear': 'rear',
-            '后面': 'rear',
-            '车尾': 'rear',
-            'top': 'top',
-            '俯视': 'top',
+            'carinterior': 'carInterior',
+            'interior': 'carInterior',
+            '内部': 'carInterior',
+            '车内': 'carInterior',
+            '座舱': 'carInterior',
+            'car.exterior': 'carExterior',
+            'carexterior': 'carExterior',
+            'exterior': 'carExterior',
+            'front': 'carExterior',
+            '正面': 'carExterior',
+            '车头': 'carExterior',
+            'rear': 'carExterior',
+            '后面': 'carExterior',
+            '车尾': 'carExterior',
+            'top': 'carExterior',
+            '俯视': 'carExterior',
+            '整车视角': 'carExterior',
+            '车外视角': 'carExterior',
             'default': 'default',
             '默认': 'default',
+            '默认视角': 'default',
             '整车': 'default',
             '车': 'default',
         };
@@ -1366,10 +1373,36 @@
     }
 
     function defaultPartView(part) {
-        const normalized = normalizeCarPart(part);
-        if (normalized === 'hood') return 'front';
-        if (normalized === 'trunk') return 'rear';
-        return 'front';
+        return 'carExterior';
+    }
+
+    function runAfterCameraReady(view, callback, fallbackDelay = 1800) {
+        const targetView = normalizeCameraView(view);
+        let done = false;
+        let timer = null;
+
+        const finish = () => {
+            if (done) return;
+            done = true;
+            if (timer) clearTimeout(timer);
+            if (window.HMIBus) window.HMIBus.off(listener);
+            callback();
+        };
+
+        const listener = (evt) => {
+            if (evt && evt.eventType === 'cameraTransitionEnd' && evt.target === targetView) {
+                finish();
+            }
+        };
+
+        if (currentView === targetView) {
+            setTimeout(finish, 80);
+            return;
+        }
+
+        if (window.HMIBus) window.HMIBus.on(listener);
+        window.HMI.switchCamera(targetView);
+        timer = setTimeout(finish, fallbackDelay);
     }
 
     function runHMICommand(funcName, params) {
@@ -1385,12 +1418,11 @@
             const part = normalizeCarPart(params.part);
             let view = normalizeCameraView(params.view || defaultPartView(part));
             if (view === 'default' || view === 'astronaut') view = defaultPartView(part);
-            window.HMI.switchCamera(view);
-            setTimeout(() => {
+            runAfterCameraReady(view, () => {
                 if (funcName === 'toggle_car_part') window.HMI.togglePart(part);
                 else if (funcName === 'open_car_part') window.HMI.openPart(part);
                 else window.HMI.closePart(part);
-            }, 260);
+            });
         }
         else if (funcName === 'rotate_car') {
             if (params.mode === 'absolute') window.HMI.rotateCarTo(params.angle || 0);
@@ -1400,7 +1432,7 @@
     }
 
     function focusInteriorView() {
-        runHMICommand('switch_camera', { view: 'interior' });
+        runHMICommand('switch_camera', { view: 'carInterior' });
     }
 
     function rebindPlayerButtons() {
