@@ -61,10 +61,17 @@ class ServiceExecutor:
 
     def _set_destination(self, params):
         dest = params.get("destination", "")
+        # VehicleState has no dedicated destination field yet; keep this in the
+        # action log and let HMI show the route card immediately.
         return f"导航目的地已设置: {dest}"
 
     def _change_lane(self, params):
         direction = params.get("direction", "左")
+        current = self.vehicle.get_dict().get("ego_lane_index", 1)
+        lane_count = self.vehicle.get_dict().get("lane_count", 3)
+        delta = 1 if str(direction).lower() in ("right", "右", "右侧", "右车道") else -1
+        next_lane = max(0, min(lane_count - 1, current + delta))
+        self.vehicle.update(ego_lane_index=next_lane)
         return f"正在执行变道({direction})"
 
     def _open_service_card(self, params):

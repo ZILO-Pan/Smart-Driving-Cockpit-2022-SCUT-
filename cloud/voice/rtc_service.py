@@ -199,7 +199,7 @@ def start_voice_chat(room_id: str, bot_user_id: str, target_user_id: str,
             "Mode": "ArkV3",
             "EndPointId": settings.ARK_ENDPOINT_ID,
             "SystemMessages": [settings.NOVA_SYSTEM_PROMPT],
-            "MaxTokens": 128,
+            "MaxTokens": 256,
             "Temperature": 0.1,
             "Tools": _get_tools_definition(),
         },
@@ -303,8 +303,51 @@ def stop_voice_chat(room_id: str, task_id: str) -> dict:
 
 
 def _get_tools_definition() -> list:
-    """5 grouped tools, minimal JSON to stay under S2S prompt limit."""
+    """Compact RTC tool definitions for proactive cockpit control."""
     return [
+        {
+            "type": "function",
+            "function": {
+                "name": "proactive_service_plan",
+                "description": "识别用户模糊表达/状态需求，生成主动服务计划，并输出可执行动作。适合：好热、好累、很烦、赶飞机、想喝奶茶、无聊、困了等。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "intent": {
+                            "type": "string",
+                            "enum": [
+                                "thermal_comfort", "emotional_care", "travel_urgency",
+                                "driving_command", "life_service", "fatigue_care",
+                                "entertainment", "general_control"
+                            ]
+                        },
+                        "confidence": {"type": "number"},
+                        "reason": {"type": "string"},
+                        "hmi_feedback": {"type": "string"},
+                        "actions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "enum": [
+                                            "set_ac_temperature", "set_seat_ventilation", "toggle_window",
+                                            "set_ambient_light", "set_cabin_mode", "play_music",
+                                            "set_destination", "change_lane", "open_service_card",
+                                            "show_alert", "toggle_service_panel", "toggle_3d_scene"
+                                        ]
+                                    },
+                                    "params": {"type": "object"}
+                                },
+                                "required": ["action", "params"]
+                            }
+                        }
+                    },
+                    "required": ["intent", "confidence", "reason", "hmi_feedback", "actions"]
+                }
+            }
+        },
         {
             "type": "function",
             "function": {

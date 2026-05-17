@@ -393,10 +393,13 @@
         const len = (buffer[4] << 24) | (buffer[5] << 16) | (buffer[6] << 8) | buffer[7];
         const payload = new TextDecoder().decode(buffer.slice(8, 8 + len));
 
+        console.log('[NOVA-BIN] magic=' + magic + ', len=' + len + ', payload=', payload.substring(0, 200));
+
         let parsed;
         try {
             parsed = JSON.parse(payload);
         } catch (e) {
+            console.warn('[NOVA-BIN] JSON parse failed for magic=' + magic);
             return;
         }
 
@@ -424,7 +427,8 @@
             const calls = parsed.tool_calls || [parsed.function_call];
             for (const call of calls) {
                 const funcName = call.function?.name || call.name || '';
-                const args = JSON.parse(call.function?.arguments || call.arguments || '{}');
+                const rawArgs = call.function?.arguments ?? call.arguments ?? {};
+                const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs || '{}') : (rawArgs || {});
                 const callId = call.id || '';
                 console.log('[NOVA-FC] Tool call received:', funcName, args);
                 setReply('正在执行: ' + funcName + '...');
@@ -466,6 +470,7 @@
                 function: funcName,
                 params: args,
                 call_id: callId,
+                client_executed: realAction !== 'query_state',
             }),
         }).then(r => r.json()).then(data => {
             setReply(data.result || ('已执行: ' + realAction));

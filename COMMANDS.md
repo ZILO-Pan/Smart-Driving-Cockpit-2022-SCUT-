@@ -38,7 +38,7 @@ python main.py --hmi-only
 
 # 旧版本地语音（PyAudio，需 --legacy-voice）
 python main.py --web-hmi --mock-carla --legacy-voice
-```
+``` 
 
 ## 清理旧文件（已废弃的 TTS/ASR 本地语音方案）
 

@@ -162,12 +162,12 @@ async def function_calling_callback(request: Request):
             })
 
             # 推送前端执行 HMI 动作
-            await _push_to_frontend({
-                "type": "fc_executed",
-                "function": func_name,
-                "params": arguments,
-                "result": result_text,
-            })
+            real_action, real_params, error = _unpack_grouped_tool(func_name, arguments)
+            if not error:
+                await _push_to_frontend(_frontend_event(
+                    real_action, real_params, result_text,
+                    original_function=func_name,
+                ))
 
             # 通过 UpdateVoiceChat 把工具结果返回给 AI（让 AI 继续说话）
             if room_id and task_id and call_id:
@@ -197,12 +197,14 @@ def _execute_function(func_name: str, params: dict) -> str:
     if not _service_executor:
         return "服务执行器未就绪"
 
+    if func_name == "proactive_service_plan":
+        return _execute_service_plan(params)
+
     # 分组工具分发
     if func_name in _GROUPED_TOOL_DISPATCH:
-        real_action = params.get("action", "")
-        real_params = params.get("params", {})
-        if real_action not in _GROUPED_TOOL_DISPATCH[func_name]:
-            return f"无效的{func_name}动作: {real_action}"
+        real_action, real_params, error = _unpack_grouped_tool(func_name, params)
+        if error:
+            return error
         print(f"[FC] Dispatch: {func_name}.{real_action}({real_params})")
         return _execute_function(real_action, real_params)
 
@@ -243,6 +245,26 @@ def _execute_function(func_name: str, params: dict) -> str:
         return f"执行失败: {e}"
 
 
+def _execute_service_plan(params: dict) -> str:
+    """执行主动服务计划中的动作列表。"""
+    params = params or {}
+    actions = params.get("actions", []) or []
+    results = []
+    for item in actions:
+        if not isinstance(item, dict):
+            continue
+        action = item.get("action") or item.get("function") or item.get("name")
+        action_params = item.get("params") or item.get("parameters") or {}
+        if not action:
+            continue
+        results.append(_execute_function(action, action_params))
+
+    feedback = params.get("hmi_feedback") or params.get("reason") or "已根据你的需求完成座舱服务计划"
+    if results:
+        return feedback + "；" + "；".join(results[:4])
+    return feedback
+
+
 def _query_state(target: str) -> str:
     """查询型工具，返回当前状态文本（让 AI 用语音播报）"""
     if target == "cabin" and _cabin_state:
@@ -261,11 +283,38 @@ def _query_state(target: str) -> str:
     return "暂无可用状态"
 
 
+def _unpack_grouped_tool(func_name: str, params: dict) -> tuple[str, dict, str]:
+    """把 RTC 分组工具拆成 HMI/ServiceExecutor 能直接执行的真实动作。"""
+    if func_name not in _GROUPED_TOOL_DISPATCH:
+        return func_name, params or {}, ""
+
+    params = params or {}
+    real_action = params.get("action", "")
+    real_params = params.get("params", {}) or {}
+    if real_action not in _GROUPED_TOOL_DISPATCH[func_name]:
+        return real_action, real_params, f"无效的{func_name}动作: {real_action}"
+    return real_action, real_params, ""
+
+
+def _frontend_event(func_name: str, params: dict, result_text: str,
+                    original_function: str = None) -> dict:
+    """生成前端可直接消费的 FC 执行事件。"""
+    return {
+        "type": "fc_executed",
+        "function": func_name,
+        "params": params or {},
+        "result": result_text,
+        "original_function": original_function or func_name,
+        "timestamp": time.time(),
+    }
+
+
 class FCExecuteRequest(BaseModel):
     room_id: str = "nova_room_001"
     function: str = ""
     params: dict = {}
     call_id: str = ""
+    client_executed: bool = False
 
 
 @router.post("/fc-execute")
@@ -276,6 +325,13 @@ async def fc_execute_from_client(req: FCExecuteRequest):
     """
     result_text = _execute_function(req.function, req.params)
     print(f"[FC-Client] {req.function}({req.params}) → {result_text}")
+
+    real_action, real_params, error = _unpack_grouped_tool(req.function, req.params)
+    if not error and not req.client_executed:
+        await _push_to_frontend(_frontend_event(
+            real_action, real_params, result_text,
+            original_function=req.function,
+        ))
 
     # 通知 AI 工具执行结果（让 AI 继续说话）
     session = _active_sessions.get(req.room_id)

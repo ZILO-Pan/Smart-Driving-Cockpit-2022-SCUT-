@@ -1,20 +1,15 @@
 (function () {
-    const CANVAS_W = 3840;
-    const CANVAS_H = 590;
-
     function scaleCanvas() {
         const canvas = document.getElementById('canvas');
         if (!canvas) return;
-        const scaleX = window.innerWidth / CANVAS_W;
-        const scaleY = window.innerHeight / CANVAS_H;
-        const scale = Math.min(scaleX, scaleY);
-        canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        const scale = window.innerWidth / 3840;
+        canvas.style.transform = `scale(${scale})`;
     }
 
     // ─── Lockscreen ──────────────────────────────────────────
     const lockscreen = document.getElementById('lockscreen');
     let idleTimer = null;
-    const IDLE_TIMEOUT = 30000;
+    const IDLE_TIMEOUT = 900000;
 
     function dismissLockscreen() {
         lockscreen.classList.add('dismissed');
@@ -1155,6 +1150,61 @@
         rebindPlayerButtons();
     }
 
+    function upsertCard(id, slots, innerHTML, extraClass) {
+        const existing = cards.find(c => c.id === id);
+        if (existing) {
+            existing.element.innerHTML = `<button class="card-close">✕</button>` + innerHTML;
+            existing.element.classList.add('fc-pulse');
+            setTimeout(() => existing.element.classList.remove('fc-pulse'), 650);
+            existing.element.querySelector('.card-close').addEventListener('click', () => removeCard(id));
+            if (id === 'parking') setTimeout(() => initParking3D(), 100);
+            if (id === 'charging') setTimeout(() => initCharging3D(), 100);
+            rebindPlayerButtons();
+            return;
+        }
+        addCard(id, slots, innerHTML, extraClass);
+    }
+
+    function fcStatusCard(title, value, meta) {
+        return `<div class="fc-status-card">
+            <span class="fc-kicker">NOVA EXECUTED</span>
+            <span class="fc-title">${title}</span>
+            <span class="fc-value">${value}</span>
+            <span class="fc-meta">${meta || ''}</span>
+        </div>`;
+    }
+
+    function normalizeServiceName(service) {
+        const map = {
+            '奶茶': 'alipay',
+            '点奶茶': 'alipay',
+            '支付': 'alipay',
+            '支付宝': 'alipay',
+            '机票': 'ctrip',
+            '航班': 'ctrip',
+            '携程': 'ctrip',
+            '新闻': 'news',
+            '停车': 'parking',
+            '停车场': 'parking',
+            '充电': 'charging',
+            '音乐': 'music',
+            '视频': 'bilibili',
+        };
+        return map[service] || service || '';
+    }
+
+    function showActionResult(action, title, value, meta) {
+        upsertCard('fc-' + action, 1, fcStatusCard(title, value, meta), 'fc-card');
+    }
+
+    function normalizeActionItem(item) {
+        if (!item) return null;
+        const action = item.action || item.function || item.name;
+        const params = item.params || item.parameters || {};
+        if (!action) return null;
+        return { action, params };
+    }
+
     function rebindPlayerButtons() {
         const btnPlay = document.getElementById('btn-play');
         const btnNext = document.getElementById('btn-next');
@@ -1563,28 +1613,100 @@
     function _executeFCAction(funcName, params) {
         console.log('[FC] Executing HMI action:', funcName, params);
         switch (funcName) {
+            case 'proactive_service_plan': {
+                const intent = params.intent || 'Proactive Service';
+                const rawConfidence = Number(params.confidence);
+                const confidence = params.confidence !== undefined
+                    ? Math.round(rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence)
+                    : null;
+                const reason = params.reason || params.hmi_feedback || '已识别用户需求并生成服务计划';
+                const actions = Array.isArray(params.actions) ? params.actions : [];
+                const planHtml = `<div class="fc-status-card">
+                    <span class="fc-kicker">INTENT UNDERSTANDING</span>
+                    <span class="fc-title">${intent}</span>
+                    <span class="fc-value">${confidence !== null && !Number.isNaN(confidence) ? confidence + '%' : 'PLAN'}</span>
+                    <span class="fc-meta">${reason}</span>
+                </div>`;
+                upsertCard('fc-intent', 1, planHtml, 'fc-card');
+                actions.map(normalizeActionItem).filter(Boolean).forEach(item => {
+                    _executeFCAction(item.action, item.params);
+                });
+                break;
+            }
+            case 'set_ac_temperature': {
+                const temp = params.temperature ?? params.temp ?? 22;
+                showActionResult('ac', 'Climate', `${temp}°C`, '空调温度已调整');
+                document.documentElement.style.setProperty('--accent-cyan', temp <= 22 ? '#3bd5ff' : '#ff9500');
+                break;
+            }
+            case 'set_seat_ventilation': {
+                const on = params.on !== false;
+                showActionResult('seat', 'Seat Ventilation', on ? 'ON' : 'OFF', on ? '座椅通风已开启' : '座椅通风已关闭');
+                break;
+            }
+            case 'toggle_window': {
+                const open = params.open !== false;
+                showActionResult('window', 'Window', open ? 'OPEN' : 'CLOSED', open ? '车窗已打开' : '车窗已关闭');
+                if (window.HMI && open) window.HMI.openPart && window.HMI.openPart('windowL');
+                if (window.HMI && !open) window.HMI.closePart && window.HMI.closePart('windowL');
+                break;
+            }
             case 'open_service_card': {
-                const svc = params.service;
+                const svc = normalizeServiceName(params.service || params.card || params.name);
                 if (svc === 'music') { musicOpen = true; handleMusicBilibili(); }
                 else if (svc === 'video' || svc === 'bilibili') { bilibiliOpen = true; handleMusicBilibili(); }
-                else if (serviceTemplates[svc]) { addCard(svc, 1, serviceTemplates[svc], ''); }
+                else if (serviceTemplates[svc]) { upsertCard(svc, 1, serviceTemplates[svc], ''); }
+                else { showActionResult('service', 'Service', params.service || svc || 'Open', '服务界面已调出'); }
                 break;
             }
             case 'play_music': {
+                const title = params.title || 'Music';
                 if (!isPlaying && audio) { audio.play(); isPlaying = true; }
+                showActionResult('music', 'Now Playing', title, '音乐服务已启动');
                 break;
             }
             case 'set_cabin_mode': {
-                // Broadcast mode change via ws for state sync
+                const mode = params.mode || '舒适';
+                showActionResult('mode', 'Cabin Mode', mode, '座舱模式已切换');
+                dockCabin.classList.add('active');
+                zoneRight.classList.remove('hidden');
                 break;
             }
             case 'show_alert': {
                 const msg = params.message || '';
-                if (msg) { setReply && window._novaHandleFCMessage({ type: 'fc_executed', function: 'show_alert', result: msg }); }
+                if (msg && window._novaHandleFCMessage) {
+                    window._novaHandleFCMessage({ type: 'fc_executed', function: 'show_alert', result: msg });
+                }
+                if (msg) showActionResult('alert', 'NOVA Alert', 'NOTICE', msg);
                 break;
             }
             case 'set_ambient_light': {
-                document.documentElement.style.setProperty('--accent-cyan', _colorMap(params.color));
+                const color = params.color || '蓝';
+                document.documentElement.style.setProperty('--accent-cyan', _colorMap(color));
+                showActionResult('light', 'Ambient Light', color, '氛围灯已调整');
+                break;
+            }
+            case 'set_destination': {
+                const dest = params.destination || params.dest || params.location || '目的地';
+                const navDest = document.querySelector('.nav-dest');
+                if (navDest) navDest.textContent = dest;
+                showActionResult('destination', 'Destination', dest, '导航目的地已更新');
+                dockNav.classList.add('active');
+                zoneCenter.classList.remove('hidden');
+                break;
+            }
+            case 'change_lane': {
+                const direction = params.direction || '左';
+                const delta = /右|right/i.test(direction) ? 1 : -1;
+                const maxLane = Math.max(1, adasData.lane_count || 3) - 1;
+                adasData.ego_lane_index = Math.min(maxLane, Math.max(0, (adasData.ego_lane_index ?? 1) + delta));
+                showActionResult('lane', 'Lane Change', /右|right/i.test(direction) ? 'RIGHT' : 'LEFT', '正在执行安全变道');
+                dockAdas.classList.add('active');
+                zoneLeft.classList.remove('hidden');
+                break;
+            }
+            case 'query_state': {
+                showActionResult('query', 'State Query', params.target || 'Vehicle', '已查询当前状态');
                 break;
             }
             // ─── Dock 面板控制 ───
@@ -1627,31 +1749,29 @@
                 break;
             }
             // ─── Unity 3D 场景控制 ───
-            case 'switch_camera': {
-                if (window.HMI) window.HMI.switchCamera(params.view);
-                break;
-            }
-            case 'reset_camera': {
-                if (window.HMI) window.HMI.sendCommand('resetCamera');
-                break;
-            }
-            case 'toggle_car_part': {
-                if (window.HMI) window.HMI.togglePart(params.part);
-                break;
-            }
-            case 'open_car_part': {
-                if (window.HMI) window.HMI.openPart(params.part);
-                break;
-            }
-            case 'close_car_part': {
-                if (window.HMI) window.HMI.closePart(params.part);
-                break;
-            }
+            case 'switch_camera':
+            case 'reset_camera':
+            case 'toggle_car_part':
+            case 'open_car_part':
+            case 'close_car_part':
             case 'rotate_car': {
+                // Auto-open 3D scene if not already visible
+                const isOpen = unityOverlay.classList.contains('active');
+                if (!isOpen) {
+                    unityOverlay.classList.add('active'); dock3d.classList.add('active');
+                    if (!unityLoaded) { loadUnity(); unityLoaded = true; }
+                }
                 if (!window.HMI) break;
-                if (params.mode === 'absolute') window.HMI.rotateCarTo(params.angle || 0);
-                else if (params.mode === 'relative') window.HMI.rotateCarBy(params.angle || 90);
-                else window.HMI.resetCarRotation();
+                if (funcName === 'switch_camera') window.HMI.switchCamera(params.view);
+                else if (funcName === 'reset_camera') window.HMI.sendCommand('resetCamera');
+                else if (funcName === 'toggle_car_part') window.HMI.togglePart(params.part);
+                else if (funcName === 'open_car_part') window.HMI.openPart(params.part);
+                else if (funcName === 'close_car_part') window.HMI.closePart(params.part);
+                else if (funcName === 'rotate_car') {
+                    if (params.mode === 'absolute') window.HMI.rotateCarTo(params.angle || 0);
+                    else if (params.mode === 'relative') window.HMI.rotateCarBy(params.angle || 90);
+                    else window.HMI.resetCarRotation();
+                }
                 break;
             }
         }
