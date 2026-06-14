@@ -7,7 +7,6 @@
   python main.py --web-hmi --no-ai     CARLA + Web HMI（无AI）
   python main.py --web-hmi --mock-carla Mock数据 + Web HMI + AI
   python main.py --hmi-only            仅 Web HMI（Mock数据，无CARLA无AI）
-  python main.py                       传统模式（CARLA + TCP Unity）
 """
 
 import sys
@@ -32,9 +31,7 @@ class SmartCockpitApp:
 
         # 各子系统（按需初始化）
         self.carla_bridge = None
-        self.tcp_server = None
         self.ai_assistant = None
-        self.service_agent = None
         self.web_hmi_thread = None
 
     def start(self):
@@ -46,7 +43,6 @@ class SmartCockpitApp:
         use_web_hmi = "--web-hmi" in self.args or "--hmi-only" in self.args
         use_carla = "--hmi-only" not in self.args and "--mock-carla" not in self.args
         use_ai = "--no-ai" not in self.args and "--hmi-only" not in self.args
-        use_tcp = not use_web_hmi
 
         # 1. CARLA 仿真（边缘端）
         if use_carla:
@@ -59,13 +55,7 @@ class SmartCockpitApp:
             print("[MAIN] CARLA 跳过（使用 Mock 数据）")
             self._start_mock_state()
 
-        # 2. TCP 服务端（保留兼容 Unity 原生客户端）
-        if use_tcp:
-            from communication.tcp_server import TCPServer
-            self.tcp_server = TCPServer(self.state_manager)
-            self.tcp_server.start()
-
-        # 3. Web HMI 服务端（边缘端）
+        # 2. Web HMI 服务端（边缘端）
         if use_web_hmi:
             from edge.hmi_server.server import start_server, set_road_map
             self.web_hmi_thread = start_server(
@@ -79,28 +69,16 @@ class SmartCockpitApp:
             else:
                 set_road_map(self._build_mock_road_map())
 
-        # 4. AI 助手（云端）
+        # 3. AI 助手（云端）—— NOVA RTC 端到端语音，浏览器端 SDK 处理录音/播放
         if use_ai:
-            use_legacy_voice = "--legacy-voice" in self.args
-
-            if settings.RTC_VOICE_ENABLED and not use_legacy_voice:
-                # 新方案：NOVA RTC 端到端语音（前端 SDK 处理录音/播放）
-                # 后端只需提供 API 端点，不启动本地 ASR/TTS
+            if settings.RTC_VOICE_ENABLED:
                 print("[MAIN] 使用 NOVA RTC 语音（浏览器端）")
             else:
-                # 旧方案：本地 PyAudio + pygame（需要 --legacy-voice 显式启用）
-                from cloud.agent.assistant_manager import AssistantManager
-                self.ai_assistant = AssistantManager(self.state_manager)
-                frame_getter = self.carla_bridge.get_latest_frame if self.carla_bridge else None
-                self.ai_assistant.start(frame_getter=frame_getter)
-                if use_web_hmi:
-                    from edge.hmi_server.server import push_ai_message_sync
-                    self.ai_assistant.on_reply(push_ai_message_sync)
-                print("[MAIN] 使用 Legacy 语音（本地 PyAudio + pygame）")
+                print("[MAIN] AI 已启用，但 NOVA RTC 语音未配置（缺少 RTC/S2S 密钥）")
         else:
             print("[MAIN] 跳过 AI 模块")
 
-        # 5. RTC 语音状态
+        # 4. RTC 语音状态
         if settings.RTC_VOICE_ENABLED:
             print(f"[MAIN] NOVA RTC 语音已就绪 (AppId={settings.RTC_APP_ID[:8]}...)")
         else:
@@ -110,8 +88,6 @@ class SmartCockpitApp:
         print(f"\n[MAIN] 所有模块已启动!")
         if use_web_hmi:
             print(f"[MAIN] Web HMI: http://localhost:{settings.WEB_HMI_PORT}")
-        if use_tcp:
-            print(f"[MAIN] Unity TCP: {settings.TCP_HOST}:{settings.TCP_PORT}")
         if use_carla:
             print("[MAIN] SPACE: 切换视角 | ESC: 退出\n")
 
@@ -250,8 +226,6 @@ class SmartCockpitApp:
         print("\n[MAIN] 正在关闭所有模块...")
         if self.carla_bridge:
             self.carla_bridge.stop()
-        if self.tcp_server:
-            self.tcp_server.stop()
         if self.ai_assistant:
             self.ai_assistant.stop()
         if self.carla_bridge:
