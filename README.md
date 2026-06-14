@@ -2,6 +2,99 @@
 
 > 面向舱驾一体场景的端云协同多模态智能座舱主动服务系统设计研究
 
+**South China University of Technology** · 华南理工大学
+
+---
+
+## Showcase
+
+<!-- 在这里放项目封面图 / 演示视频。视频可直接在 GitHub 网页编辑器中拖拽 mp4 上传 -->
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="System Overview"><br>
+      <sub><i>System overview — replace with screenshot</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="HMI Interface"><br>
+      <sub><i>HMI interface — replace with screenshot</i></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="ADAS Visualization"><br>
+      <sub><i>ADAS 3D visualization — replace with screenshot</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="Voice Assistant"><br>
+      <sub><i>NOVA voice assistant — replace with screenshot</i></sub>
+    </td>
+  </tr>
+</table>
+
+> **Demo video:** _drag an `.mp4` here in the GitHub web editor and it will embed automatically._
+
+---
+
+## Team
+
+### Advisor
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/team/oyb.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <b>Prof. Ouyang Bo</b> (欧阳波)<br>
+      <sub>Faculty Advisor · Associate Professor</sub>
+    </td>
+  </tr>
+</table>
+
+### Core Members
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/team/pzl.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <b>Pan Zilong</b> (潘子龙)<br>
+      <sub>Team Lead · AI cloud-edge integration, HW/SW system integration</sub>
+    </td>
+    <td align="center">
+      <img src="docs/team/csy.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <b>Chen Shiyu</b> (陈诗雨)<br>
+      <sub>CARLA simulation, hardware emulation</sub>
+    </td>
+    <td align="center">
+      <img src="docs/team/zhy.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <b>Zhao Hanyue</b> (赵寒玥)<br>
+      <sub>HMI design & development, theoretical research</sub>
+    </td>
+  </tr>
+</table>
+
+### Members
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/team/jjs.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <b>Jia Junsong</b> (贾竣淞)<br>
+      <sub>Cockpit experimental platform design & modeling</sub>
+    </td>
+    <td align="center">
+      <img src="docs/team/jyc.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <b>Ji Yicheng</b> (计邑澄)<br>
+      <sub>Software & hardware development</sub>
+    </td>
+    <td align="center">
+      <img src="docs/team/lzc.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <b>Li Zhecheng</b> (黎哲成)<br>
+      <sub>Human-factors experiment design, cockpit platform construction</sub>
+    </td>
+  </tr>
+</table>
+
 ## 系统架构
 
 ```
