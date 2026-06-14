@@ -44,7 +44,7 @@
 <table>
   <tr>
     <td align="center">
-      <img src="docs/team/oyb.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <img src="docs/team/oyb.png" width="180"><br>
       <b>Prof. Ouyang Bo</b> (欧阳波)<br>
       <sub>Faculty Advisor · Associate Professor</sub>
     </td>
@@ -56,17 +56,17 @@
 <table>
   <tr>
     <td align="center">
-      <img src="docs/team/pzl.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <img src="docs/team/pzl.png" width="180"><br>
       <b>Pan Zilong</b> (潘子龙)<br>
       <sub>Team Lead · AI cloud-edge integration, HW/SW system integration</sub>
     </td>
     <td align="center">
-      <img src="docs/team/csy.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <img src="docs/team/csy.png" width="180"><br>
       <b>Chen Shiyu</b> (陈诗雨)<br>
       <sub>CARLA simulation, hardware emulation</sub>
     </td>
     <td align="center">
-      <img src="docs/team/zhy.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <img src="docs/team/zhy.png" width="180"><br>
       <b>Zhao Hanyue</b> (赵寒玥)<br>
       <sub>HMI design & development, theoretical research</sub>
     </td>
@@ -78,17 +78,17 @@
 <table>
   <tr>
     <td align="center">
-      <img src="docs/team/jjs.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <img src="docs/team/jjs.png" width="180"><br>
       <b>Jia Junsong</b> (贾竣淞)<br>
       <sub>Cockpit experimental platform design & modeling</sub>
     </td>
     <td align="center">
-      <img src="docs/team/jyc.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <img src="docs/team/jyc.png" width="180"><br>
       <b>Ji Yicheng</b> (计邑澄)<br>
       <sub>Software & hardware development</sub>
     </td>
     <td align="center">
-      <img src="docs/team/lzc.png" width="150" height="150" style="object-fit:cover;border-radius:8px;"><br>
+      <img src="docs/team/lzc.png" width="180"><br>
       <b>Li Zhecheng</b> (黎哲成)<br>
       <sub>Human-factors experiment design, cockpit platform construction</sub>
     </td>
