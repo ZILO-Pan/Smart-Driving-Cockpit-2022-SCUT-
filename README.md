@@ -27,28 +27,25 @@
   <sub><i>Demo video — drag an <code>.mp4</code> here in the GitHub web editor to embed</i></sub>
 </div>
 
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <img src="docs/showcase/placeholder.png" width="100%" alt="System Overview"><br>
-      <sub><i>System overview — replace with screenshot</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="docs/showcase/placeholder.png" width="100%" alt="HMI Interface"><br>
-      <sub><i>HMI interface — replace with screenshot</i></sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <img src="docs/showcase/placeholder.png" width="100%" alt="ADAS Visualization"><br>
-      <sub><i>ADAS 3D visualization — replace with screenshot</i></sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="docs/showcase/placeholder.png" width="100%" alt="Voice Assistant"><br>
-      <sub><i>NOVA voice assistant — replace with screenshot</i></sub>
-    </td>
-  </tr>
-</table>
+<div align="center">
+  <img src="docs/showcase/placeholder.png" width="80%" alt="System Overview"><br>
+  <sub><i>System overview — replace with screenshot</i></sub>
+</div>
+
+<div align="center">
+  <img src="docs/showcase/placeholder.png" width="80%" alt="HMI Interface"><br>
+  <sub><i>HMI interface — replace with screenshot</i></sub>
+</div>
+
+<div align="center">
+  <img src="docs/showcase/placeholder.png" width="80%" alt="ADAS Visualization"><br>
+  <sub><i>ADAS 3D visualization — replace with screenshot</i></sub>
+</div>
+
+<div align="center">
+  <img src="docs/showcase/placeholder.png" width="80%" alt="Voice Assistant"><br>
+  <sub><i>NOVA voice assistant — replace with screenshot</i></sub>
+</div>
 
 ---
 
