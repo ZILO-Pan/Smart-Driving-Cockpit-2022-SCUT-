@@ -21,31 +21,35 @@
 
 ## Showcase
 
-<!-- 演示视频：在 GitHub 网页编辑器中直接把 .mp4 拖拽到下面这行即可自动嵌入 -->
+<!-- 演示视频（横向，占满一整行）：在 GitHub 网页编辑器中直接把 .mp4 拖拽替换下面的占位图即可自动嵌入 -->
 
 <div align="center">
-  <sub><i>Demo video — drag an <code>.mp4</code> here in the GitHub web editor to embed</i></sub>
+  <img src="docs/showcase/placeholder.png" width="100%" alt="Demo Video"><br>
+  <sub><i>Demo video — drag an <code>.mp4</code> here in the GitHub web editor to replace</i></sub>
 </div>
 
-<div align="center">
-  <img src="docs/showcase/placeholder.png" width="80%" alt="System Overview"><br>
-  <sub><i>System overview — replace with screenshot</i></sub>
-</div>
-
-<div align="center">
-  <img src="docs/showcase/placeholder.png" width="80%" alt="HMI Interface"><br>
-  <sub><i>HMI interface — replace with screenshot</i></sub>
-</div>
-
-<div align="center">
-  <img src="docs/showcase/placeholder.png" width="80%" alt="ADAS Visualization"><br>
-  <sub><i>ADAS 3D visualization — replace with screenshot</i></sub>
-</div>
-
-<div align="center">
-  <img src="docs/showcase/placeholder.png" width="80%" alt="Voice Assistant"><br>
-  <sub><i>NOVA voice assistant — replace with screenshot</i></sub>
-</div>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="System Overview"><br>
+      <sub><i>System overview — replace with screenshot</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="HMI Interface"><br>
+      <sub><i>HMI interface — replace with screenshot</i></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="ADAS Visualization"><br>
+      <sub><i>ADAS 3D visualization — replace with screenshot</i></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/showcase/placeholder.png" width="100%" alt="Voice Assistant"><br>
+      <sub><i>NOVA voice assistant — replace with screenshot</i></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
