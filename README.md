@@ -31,17 +31,17 @@
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/showcase/placeholder.png" width="100%" alt="System Overview"><br>
+      <img src="docs/showcase/Cockpit-display.png" width="100%" alt="System Overview"><br>
       <sub><i>System overview — replace with screenshot</i></sub>
     </td>
     <td align="center" width="50%">
-      <img src="docs/showcase/placeholder.png" width="100%" alt="HMI Interface"><br>
+      <img src="docs/showcase/HMI.png" width="100%" alt="HMI Interface"><br>
       <sub><i>HMI interface — replace with screenshot</i></sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/showcase/placeholder.png" width="100%" alt="ADAS Visualization"><br>
+      <img src="docs/showcase/Operation Demonstration.jpg" width="100%" alt="ADAS Visualization"><br>
       <sub><i>ADAS 3D visualization — replace with screenshot</i></sub>
     </td>
     <td align="center" width="50%">
